@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "echo \"window.BB_CONFIG={API_BASE:'$API_BASE'};\" > assets/env.js",
+  "outputDirectory": "."
+}
