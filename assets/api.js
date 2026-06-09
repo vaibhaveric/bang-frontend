@@ -6,8 +6,8 @@
 (function () {
   "use strict";
 
-  // Change this single line when deploying (e.g. https://api.bangalisweets.in/api)
-  const BASE = "http://localhost:8080/api";
+  // Backend URL comes from assets/env.js (window.BB_CONFIG). Fallback keeps it working if env.js is missing.
+  const BASE = (window.BB_CONFIG && window.BB_CONFIG.API_BASE) || "http://localhost:8080/api";
   const KEY_TOKEN = "bb_token_v1";
   const KEY_AUTH  = "bb_auth_v1";
 
