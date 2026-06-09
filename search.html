@@ -34,6 +34,7 @@
 
   <script src="assets/catalog.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/api.js"></script>
   <script>
     BB_APP.mount();
     const params = new URLSearchParams(location.search);
@@ -42,10 +43,11 @@
       ? `Search results for "<span style="color: var(--accent); font-style: italic;">${q}</span>"`
       : `Search`;
 
+    function renderResults() {
     if (!q) {
       document.getElementById("results").innerHTML = `<div class="empty"><div class="ic">🔍</div><p class="muted">Type something into the search bar above.</p></div>`;
     } else {
-      const matches = BB.products.filter(p =>
+      const matches = (BB.products || []).filter(p =>
         (p.en + " " + p.hi + " " + (p.desc||"") + " " + (p.cat||"")).toLowerCase().includes(q)
       );
       if (matches.length === 0) {
@@ -79,6 +81,9 @@
         `;
       }
     }
+    }
+    renderResults();
+    window.addEventListener("bb:catalogue-loaded", renderResults);
   </script>
 </body>
 </html>

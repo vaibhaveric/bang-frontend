@@ -117,23 +117,15 @@
     </table></div>`;
   }
 
-  AdminPages.catalog._restock = async function(id) {
+  AdminPages.catalog._restock = function(id) {
     const n = prompt("Restock quantity (units):");
     if (!n) return;
-    const product = products.find(p => p.id === id);
-    if (!product) return;
-    try {
-      if (window.ADMIN_API) {
-        await ADMIN_API.restock(product, Number(n));
-        products = AD.products();
-      } else {
-        const idx = products.findIndex(p => p.id === id);
-        products[idx].stock = (Number(products[idx].stock) || 0) + Number(n);
-        AD.saveProducts(products);
-      }
-      BB_APP.toast(`Stock updated · +${n} units`);
-      renderTab("catalog");
-    } catch (e) { BB_APP.toast("Error: " + e.message); }
+    const idx = products.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    products[idx].stock = (Number(products[idx].stock) || 0) + Number(n);
+    AD.saveProducts(products);
+    BB_APP.toast(`Stock updated · +${n} units`);
+    renderTab("catalog");
   };
 
   AdminPages.catalog._openDrawer = function(id) {
@@ -195,57 +187,46 @@
     `);
   };
 
-  AdminPages.catalog._save = async function(id) {
-    const get = k => document.getElementById("d-"+k)?.value || "";
-    const catSlug = get("cat");
-    // Resolve categoryId from cached categories
-    const catEntry = (ADMIN_API?.getCache()?.categories || []).find(c => c.slug === catSlug);
-    const existing = id ? products.find(p => p.id === id) : null;
+  AdminPages.catalog._save = function(id) {
+    const get = k => document.getElementById("d-"+k).value;
     const obj = {
-      ...(existing || {}),
       id: id || ("p" + Date.now()),
-      en: get("en"), hi: get("hi"), cat: catSlug,
+      en: get("en"),
+      hi: get("hi"),
+      cat: get("cat"),
       unit: get("unit"),
       price: Number(get("price")) || 0,
       mrp: Number(get("mrp")) || 0,
       stock: Number(get("stock")) || 0,
       tag: get("tag") || undefined,
-      hsn: get("hsn"), gst: Number(get("gst")) || 5,
-      img: get("img"), desc: get("desc"),
-      ingredients: get("ing"), shelf: get("shelf"),
-      seoTitle: get("seo-title"), seoDesc: get("seo-desc"),
-      _categoryId: catEntry ? catEntry.id : (existing?._categoryId),
+      hsn: get("hsn"),
+      gst: Number(get("gst")) || 5,
+      img: get("img"),
+      desc: get("desc"),
+      ingredients: get("ing"),
+      shelf: get("shelf"),
+      seoTitle: get("seo-title"),
+      seoDesc: get("seo-desc"),
     };
-    try {
-      if (window.ADMIN_API) {
-        await ADMIN_API.saveProduct(obj, !id);
-        products = AD.products();
-      } else {
-        if (id) {
-          const idx = products.findIndex(p => p.id === id);
-          if (idx > -1) products[idx] = obj;
-        } else { products.unshift(obj); }
-        AD.saveProducts(products);
-      }
-      closeDrawer(); renderTab("catalog");
-      BB_APP.toast(id ? "Product updated ✦" : "Product added");
-    } catch (e) { BB_APP.toast("Save failed: " + e.message); }
+    if (id) {
+      const idx = products.findIndex(p => p.id === id);
+      if (idx > -1) products[idx] = { ...products[idx], ...obj };
+    } else {
+      products.unshift(obj);
+    }
+    AD.saveProducts(products);
+    closeDrawer();
+    renderTab("catalog");
+    BB_APP.toast(id ? "Product updated ✦" : "Product added");
   };
 
-  AdminPages.catalog._delete = async function(id) {
-    if (!confirm("Delete this product?")) return;
-    const product = products.find(p => p.id === id);
-    try {
-      if (window.ADMIN_API && product?._backendId) {
-        await ADMIN_API.deleteProduct(product);
-        products = AD.products();
-      } else {
-        products = products.filter(p => p.id !== id);
-        AD.saveProducts(products);
-      }
-      closeDrawer(); renderTab("catalog");
-      BB_APP.toast("Product deleted");
-    } catch (e) { BB_APP.toast("Delete failed: " + e.message); }
+  AdminPages.catalog._delete = function(id) {
+    if (!confirm("Delete this product? You can restore via 'Reset demo'.")) return;
+    products = products.filter(p => p.id !== id);
+    AD.saveProducts(products);
+    closeDrawer();
+    renderTab("catalog");
+    BB_APP.toast("Product deleted");
   };
 
   AdminPages.catalog._exportCSV = function() {

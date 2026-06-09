@@ -165,6 +165,7 @@
 
   <script src="assets/catalog.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/api.js"></script>
   <script>
     BB_APP.mount();
 
@@ -178,12 +179,14 @@
     }
     window.lookup = lookup;
 
-    function renderOrder(id) {
-      const orders = BB_APP.orders.read();
-      const order = orders.find(o => o.id === id);
+    async function renderOrder(id) {
       const root = document.getElementById("content");
+      root.innerHTML = `<div class="empty"><div class="ic">⏳</div><p class="muted">Looking up ${id}…</p></div>`;
 
-      if (!order) {
+      let o = null;
+      try { o = await BB_API.trackOrder(id); } catch (e) { o = null; }
+
+      if (!o) {
         root.innerHTML = `
           <div class="empty">
             <div class="ic">🔍</div>
@@ -194,21 +197,34 @@
         return;
       }
 
+      const order = {
+        id:       o.orderNumber || id,
+        name:     o.customerName || "Customer",
+        placedAt: o.createdAt ? new Date(o.createdAt).getTime() : Date.now(),
+        total:    parseFloat(o.total || 0),
+        payment:  o.paymentMode || "cod",
+        mode:     o.mode || "delivery",
+        address:  o.deliveryAddress || "",
+        pin:      o.pincode || "",
+        status:   o.status || "Packing",
+        items:    (o.items || []).map(i => ({ img: i.productImage || "", name: i.productName, qty: i.quantity, price: parseFloat(i.unitPrice || 0) })),
+      };
+
       const date = new Date(order.placedAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit" });
-      const eta = order.mode === "ship" ? "Tue, 19 May · by 7 PM"
+      const eta = order.mode === "ship" ? "3–5 business days"
                 : order.mode === "pickup" ? "Ready in 30 min"
                 : "Today · 6 PM";
 
-      // simulate current step based on time elapsed
-      const elapsedMin = (Date.now() - order.placedAt) / 60000;
+      // Drive the timeline from the real backend order status
+      const STATUS_ORDER = ["packing", "sealed", "out for delivery", "delivered"];
+      const si = STATUS_ORDER.indexOf((order.status || "packing").toLowerCase());
       const stepStates = [
-        { done: true,           label: "Order received",   t: date,                    msg: "We've received your order and payment." },
-        { done: elapsedMin > 2, label: "Packing now",      t: "~5 min ago",            msg: "Bhaiya Ram's team is plating your mithai in our Bhind kitchen." },
-        { done: elapsedMin > 8, label: "Quality check & seal", t: elapsedMin > 8 ? "~3 min ago" : "—", msg: "Final taste check, vacuum seal, and thermal liner for safe travel." },
-        { done: elapsedMin > 15, label: order.mode === "pickup" ? "Ready for pickup" : "Out for delivery", t: elapsedMin > 15 ? "Just now" : "—", msg: order.mode === "pickup" ? "Pickup from our Pustak Bazar outlet, Bhind." : "Our rider has your order. WhatsApp updates will follow." },
-        { done: false,          label: "Delivered",         t: `ETA · ${eta}`,         msg: "Enjoy! Tag us @bangalisweets.bhind for a chance at free mithai." },
+        { done: true,    label: "Order received",        t: date,                                   msg: "We've received your order and payment." },
+        { done: si >= 0, label: "Packing now",           t: si >= 0 ? "Done" : "—",                  msg: "Bhaiya Ram's team is plating your mithai in our Bhind kitchen." },
+        { done: si >= 1, label: "Quality check & seal",  t: si >= 1 ? "Done" : "—",                  msg: "Final taste check, vacuum seal, and thermal liner for safe travel." },
+        { done: si >= 2, label: order.mode === "pickup" ? "Ready for pickup" : "Out for delivery", t: si >= 2 ? "In progress" : "—", msg: order.mode === "pickup" ? "Pickup from our Pustak Bazar outlet, Bhind." : "Our rider has your order. WhatsApp updates will follow." },
+        { done: si >= 3, label: "Delivered",             t: si >= 3 ? "Delivered" : `ETA · ${eta}`,  msg: "Enjoy! Tag us @bangalisweets.bhind for a chance at free mithai." },
       ];
-      // mark the current step (first non-done) as curr
       let currMarked = false;
       stepStates.forEach(s => { if (!s.done && !currMarked) { s.curr = true; currMarked = true; } });
 
@@ -274,26 +290,31 @@
       `;
     }
 
+    function showNoOrders() {
+      document.getElementById("content").innerHTML = `
+        <div class="empty">
+          <div class="ic">📦</div>
+          <h2 class="h2 disp">No orders yet</h2>
+          <p class="muted">Once you place an order, you can track it here in real-time.</p>
+          <a class="btn" href="collections.html" style="margin-top: 16px;">Browse collections →</a>
+        </div>
+      `;
+    }
+
     if (askId) {
       document.getElementById("lookup-id").value = askId;
       renderOrder(askId);
+    } else if (BB_API.isLoggedIn()) {
+      // show the signed-in customer's most recent order
+      BB_API.getMyOrders().then(list => {
+        if (list && list.length > 0) {
+          const latest = list[0];
+          document.getElementById("lookup-id").value = latest.orderNumber;
+          renderOrder(latest.orderNumber);
+        } else { showNoOrders(); }
+      }).catch(showNoOrders);
     } else {
-      // show most recent order if any
-      const orders = BB_APP.orders.read();
-      if (orders.length > 0) {
-        const latest = orders[orders.length - 1];
-        document.getElementById("lookup-id").value = latest.id;
-        renderOrder(latest.id);
-      } else {
-        document.getElementById("content").innerHTML = `
-          <div class="empty">
-            <div class="ic">📦</div>
-            <h2 class="h2 disp">No orders yet</h2>
-            <p class="muted">Once you place an order, you can track it here in real-time.</p>
-            <a class="btn" href="collections.html" style="margin-top: 16px;">Browse collections →</a>
-          </div>
-        `;
-      }
+      showNoOrders();
     }
   </script>
 </body>

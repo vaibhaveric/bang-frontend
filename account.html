@@ -193,12 +193,16 @@
 
   <script src="assets/catalog.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/api.js"></script>
   <script>
     BB_APP.mount();
 
     const root = document.getElementById("ac-root");
+    const acState = { phase: "phone", phone: "" };
+    let myOrders = [];
 
     function renderSignedOut() {
+      if (acState.phase === "otp") { renderOtp(); return; }
       root.innerHTML = `
         <div class="signin-card">
           <div class="seal">B</div>
@@ -215,19 +219,46 @@
       document.getElementById("ph").focus();
     }
 
-    function signin() {
+    function renderOtp() {
+      root.innerHTML = `
+        <div class="signin-card">
+          <div class="seal">B</div>
+          <h2 class="disp">Verify OTP</h2>
+          <p style="font-size: 14px; color: var(--ink-2)">Sent to <strong>+91 ${acState.phone}</strong></p>
+          <input class="input" id="nm" placeholder="Your name" style="margin: 10px 0;"/>
+          <input class="input" id="otp" inputmode="numeric" maxlength="6" placeholder="6-digit OTP"/>
+          <button class="btn btn-lg btn-block" style="margin-top: 12px;" onclick="verifyAccount()">Verify →</button>
+          <button class="btn btn-ghost btn-block" style="margin-top: 8px;" onclick="acState.phase='phone'; render()">← Change number</button>
+        </div>
+      `;
+      document.getElementById("otp").focus();
+    }
+
+    async function signin() {
       const v = document.getElementById("ph").value.replace(/\D/g, "");
       if (v.length !== 10) { BB_APP.toast("Please enter a valid 10-digit phone"); return; }
-      // mock OTP step: jump straight to a placeholder (we'd normally go through OTP flow)
-      const name = prompt("Demo prototype — enter your name to mock-sign-in:") || "Customer";
-      BB_APP.auth.login(v, name);
-      render();
-      BB_APP.toast("Signed in · welcome ✦");
+      try { await BB_API.sendOtp(v); }
+      catch (e) { BB_APP.toast("Could not send OTP: " + e.message); return; }
+      acState.phone = v; acState.phase = "otp";
+      renderOtp();
     }
     window.signin = signin;
 
+    async function verifyAccount() {
+      const otp = document.getElementById("otp").value.replace(/\D/g, "");
+      const name = document.getElementById("nm").value.trim();
+      if (otp.length !== 6) { BB_APP.toast("Enter the 6-digit OTP"); return; }
+      try { await BB_API.verifyOtp(acState.phone, otp, name || undefined); }
+      catch (e) { BB_APP.toast("Invalid OTP, please try again"); return; }
+      acState.phase = "phone";
+      BB_APP.toast("Signed in · welcome ✦");
+      render();
+    }
+    window.verifyAccount = verifyAccount;
+
     function signout() {
       if (!confirm("Sign out of your account?")) return;
+      BB_API.logout();
       BB_APP.auth.logout();
       render();
     }
@@ -235,7 +266,7 @@
 
     function renderSignedIn() {
       const auth = BB_APP.auth.read();
-      const orders = BB_APP.orders.read();
+      const orders = myOrders;
       const memberSince = auth.joined ? new Date(auth.joined).toLocaleDateString("en-IN", { year: "numeric", month: "long" }) : "—";
       const totalSpend = orders.reduce((s, o) => s + (o.total || 0), 0);
       const points = Math.floor(totalSpend * 0.02);
@@ -352,10 +383,28 @@
       `;
     }
 
-    function render() {
+    async function render() {
       const auth = BB_APP.auth.read();
-      if (auth) renderSignedIn();
-      else renderSignedOut();
+      if (!auth) { renderSignedOut(); return; }
+      if (BB_API.isLoggedIn()) {
+        // Pull live orders from the backend for this customer
+        try {
+          const raw = await BB_API.getMyOrders();
+          myOrders = (raw || []).map(o => ({
+            id:       o.orderNumber,
+            placedAt: o.createdAt ? new Date(o.createdAt).getTime() : Date.now(),
+            status:   o.status || "Processing",
+            total:    parseFloat(o.total || 0),
+            mode:     o.mode || "delivery",
+            address:  o.deliveryAddress || "",
+            pin:      o.pincode || "",
+            items:    (o.items || []).map(i => ({ img: i.productImage || "", en: i.productName, qty: i.quantity })),
+          }));
+        } catch { myOrders = []; }
+      } else {
+        myOrders = BB_APP.orders.read();   // legacy local session fallback
+      }
+      renderSignedIn();
     }
 
     render();

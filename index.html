@@ -399,73 +399,79 @@
 
   <script src="assets/catalog.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/api.js"></script>
   <script>
     BB_APP.mount({ nav: null });
 
-    // Categories
-    document.getElementById("cat-grid").innerHTML = BB.categories.map(c => `
-      <a class="cat-card" href="category.html?slug=${c.slug}">
-        <div class="tile">
-          <img src="${c.hero}" alt="${c.en}"/>
-          <div class="lbl">
-            <div class="lbl-hi">${c.hi}</div>
-            <div class="lbl-en">${c.en}</div>
+    function renderHome() {
+      // Categories
+      document.getElementById("cat-grid").innerHTML = (BB.categories || []).map(c => `
+        <a class="cat-card" href="category.html?slug=${c.slug}">
+          <div class="tile">
+            <img src="${c.hero}" alt="${c.en}"/>
+            <div class="lbl">
+              <div class="lbl-hi">${c.hi}</div>
+              <div class="lbl-en">${c.en}</div>
+            </div>
           </div>
-        </div>
-        <div class="meta">${c.items} items</div>
-      </a>
-    `).join("");
-
-    // Hampers
-    const hampers = BB.products.filter(p => p.cat === "hampers");
-    document.getElementById("hampers-grid").innerHTML = hampers.map(h => `
-      <article class="product-card">
-        <a href="product.html?id=${h.id}" class="img" aria-label="${h.en}">
-          <img src="${h.img}" alt="${h.en} — ${h.pieces || ""}"/>
-          ${h.tag ? `<span class="tag gold">${h.tag}</span>` : ""}
+          <div class="meta">${c.items} items</div>
         </a>
-        <div class="body">
-          <div class="hi">${h.hi}</div>
-          <div class="nm"><a href="product.html?id=${h.id}">${h.en}</a></div>
-          <div class="meta">${h.pieces || h.unit}</div>
-          <div class="row">
-            <span class="price">${BB_APP.rupee(h.price)} <span class="mrp">₹${h.mrp}</span></span>
-            <button class="btn btn-sm" onclick="BB_APP.cart.add('${h.id}')">Add</button>
-          </div>
-        </div>
-      </article>
-    `).join("");
+      `).join("");
 
-    // Bestsellers
-    const best = BB.bestsellers.slice(0, 4).map(id => BB.products.find(p => p.id === id)).filter(Boolean);
-    document.getElementById("bestsellers-grid").innerHTML = best.map(s => `
-      <article class="product-card">
-        <a href="product.html?id=${s.id}" class="img" aria-label="${s.en}">
-          <img src="${s.img}" alt="${s.en} ${s.unit || ""}"/>
-        </a>
-        <div class="body">
-          <div class="hi">${s.hi}</div>
-          <div class="nm"><a href="product.html?id=${s.id}">${s.en}</a></div>
-          <div class="meta">${s.unit || s.pieces || ""}</div>
-          <div class="row">
-            <span class="price">${BB_APP.rupee(s.price)} <span class="mrp">₹${s.mrp}</span></span>
-            <button class="add" aria-label="Add ${s.en}" onclick="BB_APP.cart.add('${s.id}')">
-              ${BB_APP.icons.plus}
-            </button>
+      // Hampers
+      const hampers = (BB.products || []).filter(p => p.cat === "hampers");
+      document.getElementById("hampers-grid").innerHTML = hampers.map(h => `
+        <article class="product-card">
+          <a href="product.html?id=${h.id}" class="img" aria-label="${h.en}">
+            <img src="${h.img}" alt="${h.en} — ${h.pieces || ""}"/>
+            ${h.tag ? `<span class="tag gold">${h.tag}</span>` : ""}
+          </a>
+          <div class="body">
+            <div class="hi">${h.hi}</div>
+            <div class="nm"><a href="product.html?id=${h.id}">${h.en}</a></div>
+            <div class="meta">${h.pieces || h.unit}</div>
+            <div class="row">
+              <span class="price">${BB_APP.rupee(h.price)} <span class="mrp">₹${h.mrp}</span></span>
+              <button class="btn btn-sm" onclick="BB_APP.cart.add('${h.id}')">Add</button>
+            </div>
           </div>
-        </div>
-      </article>
-    `).join("");
+        </article>
+      `).join("");
 
-    // Reviews
-    document.getElementById("reviews-grid").innerHTML = BB.reviews.map(r => `
-      <div class="review">
-        <div class="stars">${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</div>
-        <p style="font-size: 14px; line-height: 1.65; color: var(--ink-2); margin: 0">"${r.text}"</p>
-        <div class="nm">${r.name}</div>
-        <div class="date">${r.date}</div>
-      </div>
-    `).join("");
+      // Bestsellers — sort by sold count (works with live backend IDs)
+      const best = (BB.products || []).slice().sort((a, b) => (b.sold || 0) - (a.sold || 0)).slice(0, 4);
+      document.getElementById("bestsellers-grid").innerHTML = best.map(s => `
+        <article class="product-card">
+          <a href="product.html?id=${s.id}" class="img" aria-label="${s.en}">
+            <img src="${s.img}" alt="${s.en} ${s.unit || ""}"/>
+          </a>
+          <div class="body">
+            <div class="hi">${s.hi}</div>
+            <div class="nm"><a href="product.html?id=${s.id}">${s.en}</a></div>
+            <div class="meta">${s.unit || s.pieces || ""}</div>
+            <div class="row">
+              <span class="price">${BB_APP.rupee(s.price)} <span class="mrp">₹${s.mrp}</span></span>
+              <button class="add" aria-label="Add ${s.en}" onclick="BB_APP.cart.add('${s.id}')">
+                ${BB_APP.icons.plus}
+              </button>
+            </div>
+          </div>
+        </article>
+      `).join("");
+
+      // Reviews
+      document.getElementById("reviews-grid").innerHTML = (BB.reviews || []).map(r => `
+        <div class="review">
+          <div class="stars">${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</div>
+          <p style="font-size: 14px; line-height: 1.65; color: var(--ink-2); margin: 0">"${r.text}"</p>
+          <div class="nm">${r.name}</div>
+          <div class="date">${r.date}</div>
+        </div>
+      `).join("");
+    }
+
+    renderHome();
+    window.addEventListener("bb:catalogue-loaded", renderHome);
   </script>
 </body>
 </html>

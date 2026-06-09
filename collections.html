@@ -93,19 +93,25 @@
 
   <script src="assets/catalog.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/api.js"></script>
   <script>
     BB_APP.mount();
-    document.getElementById("collections-grid").innerHTML = BB.categories.map(c => `
-      <a class="col-card" href="category.html?slug=${c.slug}">
-        <img src="${c.hero}" alt="${c.en} collection"/>
-        <span class="count">${c.items} items</span>
-        <div class="lbl">
-          <div class="hi">${c.hi}</div>
-          <div class="en">${c.en}</div>
-          <div class="desc">${c.desc}</div>
-        </div>
-      </a>
-    `).join("");
+    function renderCollections() {
+      const cats = BB.categories || [];
+      document.getElementById("collections-grid").innerHTML = cats.length ? cats.map(c => `
+        <a class="col-card" href="category.html?slug=${c.slug}">
+          <img src="${c.hero}" alt="${c.en} collection"/>
+          <span class="count">${c.items} items</span>
+          <div class="lbl">
+            <div class="hi">${c.hi}</div>
+            <div class="en">${c.en}</div>
+            <div class="desc">${c.desc}</div>
+          </div>
+        </a>
+      `).join("") : `<p class="muted" style="padding:24px 0">Loading collections…</p>`;
+    }
+    renderCollections();
+    window.addEventListener("bb:catalogue-loaded", renderCollections);
   </script>
 </body>
 </html>

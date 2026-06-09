@@ -280,6 +280,7 @@
 
   <script src="assets/catalog.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/api.js"></script>
   <script>
     BB_APP.mount();
 
@@ -303,8 +304,8 @@
     if (auth) {
       state.phone = auth.phone || "";
       state.name = auth.name || "";
-      // skip to step 3 (delivery) if already signed in
-      if (state.phone && state.name) state.step = 3;
+      // skip to step 3 (delivery) only if already signed in AND we hold a backend JWT
+      if (state.phone && state.name && BB_API.isLoggedIn()) state.step = 3;
     }
 
     // Redirect to cart if empty
@@ -595,13 +596,19 @@
       }
     }
 
-    function sendOtp() {
+    async function sendOtp() {
       const v = document.getElementById("phone").value.replace(/\D/g, "");
       if (v.length !== 10) {
         BB_APP.toast("Please enter a valid 10-digit phone number");
         return;
       }
       state.phone = v;
+      try {
+        await BB_API.sendOtp(v);   // backend generates + sends OTP (dev mode surfaces it as a toast)
+      } catch (e) {
+        BB_APP.toast("Could not send OTP: " + e.message);
+        return;
+      }
       state.otpResendIn = 30;
       state.step = 1;
       render();
@@ -651,10 +658,15 @@
     }
     window.startTimer = startTimer;
 
-    function verifyOtp() {
+    async function verifyOtp() {
       const v = [...document.querySelectorAll("#otp-row input")].map(i => i.value).join("");
       if (v.length !== 6) return;
-      // mock-accept any 6-digit OTP
+      try {
+        await BB_API.verifyOtp(state.phone, v, state.name || undefined);  // verifies + stores JWT
+      } catch (e) {
+        BB_APP.toast("Invalid OTP, please try again");
+        return;
+      }
       state.step = state.name ? 3 : 2;
       render();
     }
@@ -683,19 +695,27 @@
       render();
     }
 
-    function placeOrder() {
-      const order = BB_APP.orders.place({
-        phone: state.phone,
-        name: state.name,
-        email: state.email,
-        mode: state.mode,
-        address: state.mode === "pickup" ? BB.shop.address : state.address,
-        pin: state.pin,
-        landmark: state.landmark,
-        payment: state.payment,
-        total: state.total,
-      });
-      state.orderId = order.id;
+    async function placeOrder() {
+      const payment = state.payment === "cod" ? "cod" : "online";
+      let order;
+      try {
+        order = await BB_API.placeOrder({
+          phone: state.phone,
+          name: state.name,
+          email: state.email,
+          mode: state.mode,
+          address: state.mode === "pickup" ? BB.shop.address : state.address,
+          pin: state.pin,
+          landmark: state.landmark,
+          payment: payment,
+          couponCode: state.coupon || "",
+        });
+      } catch (e) {
+        BB_APP.toast("Could not place order: " + e.message);
+        return;
+      }
+      state.orderId = order.orderNumber || order.id;
+      if (order.total) state.total = parseFloat(order.total);
       state.step = 5;
       render();
       BB_APP.toast("Order placed! 🎉");

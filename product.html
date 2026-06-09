@@ -191,23 +191,33 @@
 
   <script src="assets/catalog.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/api.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const id = params.get("id") || "h1";
-    const p = BB_APP.find.product(id) || BB.products[0];
-    const cat = BB_APP.find.category(p.cat);
-
-    BB_APP.analytics.trackProductView(p.id);
-    BB_APP.mount({ nav: p.cat });
-
-    document.title = `${p.en} (${p.hi}) ${p.unit || p.pieces || ""} — Bangali Sweets`;
-    document.getElementById("page-desc").setAttribute("content", `${p.desc.slice(0, 150)} Order online from Bangali Sweets, Bhind.`);
-
-    document.getElementById("crumb-cat").textContent = cat.en;
-    document.getElementById("crumb-cat").href = `category.html?slug=${cat.slug}`;
-    document.getElementById("crumb-name").textContent = p.en;
-
+    let p = null;
+    let cat = null;
     let qty = 1;
+
+    BB_APP.mount({ nav: null });
+
+    function init() {
+      p = BB_APP.find.product(id);
+      if (!p) {
+        // Catalogue not loaded yet — show a placeholder, re-run on bb:catalogue-loaded.
+        document.getElementById("pd-top").innerHTML = `<p class="muted" style="padding:40px 0">Loading product…</p>`;
+        return;
+      }
+      cat = BB_APP.find.category(p.cat) || { en: "", slug: "", hi: "" };
+      BB_APP.analytics.trackProductView(p.id);
+      document.title = `${p.en} (${p.hi}) ${p.unit || p.pieces || ""} — Bangali Sweets`;
+      document.getElementById("page-desc").setAttribute("content", `${(p.desc || "").slice(0, 150)} Order online from Bangali Sweets, Bhind.`);
+      document.getElementById("crumb-cat").textContent = cat.en;
+      document.getElementById("crumb-cat").href = `category.html?slug=${cat.slug}`;
+      document.getElementById("crumb-name").textContent = p.en;
+      render();
+      renderRelated();
+    }
 
     function render() {
       const stars = "★".repeat(Math.round(p.rating || 4)) + "☆".repeat(5 - Math.round(p.rating || 4));
@@ -295,8 +305,6 @@
       `;
     }
 
-    render();
-
     function checkPin() {
       const v = document.getElementById("pin").value;
       const ok = document.getElementById("pin-ok");
@@ -315,22 +323,26 @@
       }
     }
 
-    // Related
-    const related = BB.products.filter(x => x.cat === p.cat && x.id !== p.id).slice(0, 4);
-    document.getElementById("related").innerHTML = related.map(r => `
-      <article class="product-card">
-        <a href="product.html?id=${r.id}" class="img"><img src="${r.img}" alt="${r.en}"/></a>
-        <div class="body">
-          <div class="hi">${r.hi}</div>
-          <div class="nm"><a href="product.html?id=${r.id}">${r.en}</a></div>
-          <div class="meta">${r.unit || r.pieces || ''}</div>
-          <div class="row">
-            <span class="price">${BB_APP.rupee(r.price)} <span class="mrp">₹${r.mrp}</span></span>
-            <button class="add" onclick="BB_APP.cart.add('${r.id}')">${BB_APP.icons.plus}</button>
+    function renderRelated() {
+      const related = (BB.products || []).filter(x => x.cat === p.cat && x.id !== p.id).slice(0, 4);
+      document.getElementById("related").innerHTML = related.map(r => `
+        <article class="product-card">
+          <a href="product.html?id=${r.id}" class="img"><img src="${r.img}" alt="${r.en}"/></a>
+          <div class="body">
+            <div class="hi">${r.hi}</div>
+            <div class="nm"><a href="product.html?id=${r.id}">${r.en}</a></div>
+            <div class="meta">${r.unit || r.pieces || ''}</div>
+            <div class="row">
+              <span class="price">${BB_APP.rupee(r.price)} <span class="mrp">₹${r.mrp}</span></span>
+              <button class="add" onclick="BB_APP.cart.add('${r.id}')">${BB_APP.icons.plus}</button>
+            </div>
           </div>
-        </div>
-      </article>
-    `).join("");
+        </article>
+      `).join("");
+    }
+
+    init();
+    window.addEventListener("bb:catalogue-loaded", init);
   </script>
 </body>
 </html>

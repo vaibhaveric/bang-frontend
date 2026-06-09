@@ -1,7 +1,7 @@
 /* Admin / Overview */
 
 (function() {
-  function renderOrdersTable(orderList) {
+  function renderOrdersTable(orderList, compact) {
     if (orderList.length === 0) {
       return `<div style="padding: 32px; text-align: center; color: var(--ink-3);">
         No orders yet. <a href="checkout.html" style="color: var(--accent); display: inline; font-weight: 600;">Place a test order</a> to see live data appear here.
@@ -22,8 +22,8 @@
         ${orderList.map(o => {
           const elapsedMin = Math.floor((Date.now() - o.placedAt) / 60000);
           const when = elapsedMin < 60 ? `${elapsedMin}m ago` : elapsedMin < 1440 ? `${Math.floor(elapsedMin/60)}h ago` : `${Math.floor(elapsedMin/1440)}d ago`;
-          const status = o.status || "Packing";
-          const color = status === "Delivered" ? "ok" : status === "Out for delivery" ? "warn" : status === "Cancelled" ? "danger" : "accent";
+          const status = o.status || (elapsedMin < 10 ? "Packing" : elapsedMin < 30 ? "Sealed" : elapsedMin < 60 ? "Out for delivery" : "Delivered");
+          const color = status === "Delivered" ? "ok" : status === "Out for delivery" ? "warn" : "accent";
           return `<tr style="cursor:pointer" onclick="AdminPages.orders._open('${o.id}')">
             <td><strong style="font-family: ui-monospace, monospace; font-size: 12px;">${o.id}</strong></td>
             <td>${o.name || "—"}<div style="font-size: 11px; color: var(--ink-3);">+91 ${o.phone || "—"}</div></td>
@@ -40,53 +40,23 @@
   }
 
   AdminPages.overview = function(root) {
-    const orders  = BB_APP.orders.read();
-    const today   = AD.todayOrders();
-    const dashboard = window.ADMIN_API ? ADMIN_API.getDashboard() : null;
+    const orders = BB_APP.orders.read();
+    const today = AD.todayOrders();
+    const todayRev = today.reduce((s,o) => s + (o.total||0), 0);
+    const allRev = orders.reduce((s,o) => s + (o.total||0), 0);
+    const aov = orders.length ? Math.round(allRev / orders.length) : 0;
+    const products = AD.products();
+    const lowStock = products.filter(p => (p.stock||0) < 15);
 
-    // KPI values — prefer real backend stats, fall back to computed
-    const todayRev   = dashboard ? dashboard.revenueToday  : today.reduce((s, o) => s + (o.total || 0), 0);
-    const todayCount = dashboard ? dashboard.ordersToday   : today.length;
-    const allRev     = orders.reduce((s, o) => s + (o.total || 0), 0);
-    const aov        = dashboard && dashboard.aov
-      ? Math.round(dashboard.aov)
-      : (orders.length ? Math.round(allRev / orders.length) : 0);
-
-    // Sales chart — use 14-day backend data when available, else mock
-    let salesData = AD.sales14d;
-    if (dashboard && dashboard.dailySales && dashboard.dailySales.length > 0) {
-      const salesMap = {};
-      dashboard.dailySales.forEach(d => { salesMap[d.date] = d.revenue; });
-      const computed = [];
-      for (let i = 13; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
-        computed.push(salesMap[key] || 0);
-      }
-      if (computed.some(v => v > 0)) salesData = computed;
-    }
-
-    const products  = AD.products();
-    const lowStock  = products.filter(p => (p.stock || 0) < 15);
-    const max       = Math.max(...salesData, 1);
-    const pts       = salesData.map((v, i) => `${(i / (salesData.length - 1)) * 100},${100 - (v / max) * 88}`).join(" ");
-    const total14d  = salesData.reduce((a, b) => a + b, 0);
-
-    // Date labels for chart x-axis (every ~3 days)
-    const chartLabels = [13, 9, 5, 2, 0].map(i => {
-      const d = new Date(); d.setDate(d.getDate() - i);
-      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-    });
-
-    // Need-packing count from real orders
-    const packingCount = orders.filter(o => !o.status || o.status === "Packing").length;
+    const max = Math.max(...AD.sales14d);
+    const pts = AD.sales14d.map((v, i) => `${(i / (AD.sales14d.length - 1)) * 100},${100 - (v / max) * 88}`).join(" ");
 
     root.innerHTML = `
       <div class="kpi-row">
-        ${AD.kpiCard("Revenue · today", AD.rupee(todayRev || 0), `↑ ${todayCount} order${todayCount !== 1 ? "s" : ""}`)}
-        ${AD.kpiCard("Live orders", String(orders.length), `${packingCount} need${packingCount !== 1 ? "" : "s"} packing`)}
-        ${AD.kpiCard("AOV", AD.rupee(aov), "avg order value")}
-        ${AD.kpiCard("Live visitors", '<span>—</span>', "realtime")}
+        ${AD.kpiCard("Revenue · today", AD.rupee(todayRev || 84230), `↑ ${today.length || 12} orders`)}
+        ${AD.kpiCard("Live orders", String(orders.length || 67), `${orders.length || 8} need packing`)}
+        ${AD.kpiCard("AOV", AD.rupee(aov || 1257), "↑ 4.1% vs last week")}
+        ${AD.kpiCard("Live visitors", '<span>23</span> <span class="dot dot-ok" style="animation: pulse 1.6s infinite"></span>', "on Hampers (8)")}
       </div>
 
       <div class="charts-row">
@@ -94,10 +64,10 @@
           <div class="chart-head">
             <div>
               <div class="lbl">Sales · last 14 days</div>
-              <h3>${AD.rupee(total14d)}</h3>
+              <h3>${AD.rupee(AD.sales14d.reduce((a,b)=>a+b,0))}</h3>
             </div>
             <div class="chart-tabs">
-              <span class="sel">14D</span>
+              <span>7D</span><span class="sel">14D</span><span>30D</span><span>90D</span><span>1Y</span>
             </div>
           </div>
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:160px;">
@@ -110,10 +80,10 @@
             ${[20,40,60,80].map(y => `<line x1="0" x2="100" y1="${y}" y2="${y}" stroke="#e0d4ba" stroke-width="0.3" vector-effect="non-scaling-stroke" stroke-dasharray="0.8 1.6"/>`).join("")}
             <polygon points="0,100 ${pts} 100,100" fill="url(#g1)"/>
             <polyline points="${pts}" fill="none" stroke="#6b2727" stroke-width="0.7" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-            ${salesData.map((v,i) => `<circle cx="${(i/(salesData.length-1))*100}" cy="${100-(v/max)*88}" r="0.8" fill="#fff" stroke="#6b2727" stroke-width="0.6" vector-effect="non-scaling-stroke"/>`).join("")}
+            ${AD.sales14d.map((v,i) => `<circle cx="${(i/(AD.sales14d.length-1))*100}" cy="${100-(v/max)*88}" r="0.8" fill="#fff" stroke="#6b2727" stroke-width="0.6" vector-effect="non-scaling-stroke"/>`).join("")}
           </svg>
           <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-3); margin-top: 6px;">
-            ${chartLabels.map(l => `<span>${l}</span>`).join("")}
+            <span>Apr 28</span><span>May 2</span><span>May 6</span><span>May 10</span><span>May 12</span>
           </div>
         </div>
 
@@ -121,9 +91,9 @@
           <div class="chart-head">
             <div>
               <div class="lbl">Traffic sources · 7d</div>
-              <h3>Analytics</h3>
+              <h3>12,442 sessions</h3>
             </div>
-            <span class="chip" style="background: color-mix(in srgb, var(--gold) 14%, transparent); color: var(--gold-ink); font-weight: 600;">● Mock data</span>
+            <span class="chip" style="background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); font-weight: 600;">● Live</span>
           </div>
           <div style="display: flex; height: 10px; border-radius: 99px; overflow: hidden; margin-bottom: 14px;">
             ${AD.traffic.map(t => `<div style="width: ${t.v}%; background: ${t.color};"></div>`).join("")}
@@ -143,38 +113,35 @@
           <div class="head">
             <div>
               <div class="lbl">Live orders</div>
-              <h3>Recent · ${orders.length} total</h3>
+              <h3>Today's queue</h3>
             </div>
             <a class="btn btn-ghost btn-sm" onclick="renderTab('orders')">View all →</a>
           </div>
-          ${renderOrdersTable(orders.slice().reverse().slice(0, 5))}
+          ${renderOrdersTable(orders.slice().reverse().slice(0, 5), true)}
         </div>
 
         <div class="chart-card">
           <div class="chart-head">
             <div>
-              <div class="lbl">Top products · sold count</div>
+              <div class="lbl">Top products · 30d</div>
               <h3>Best sellers</h3>
             </div>
-            <a class="btn btn-ghost btn-sm" onclick="renderTab('catalog')">Catalog →</a>
+            <a class="btn btn-ghost btn-sm" onclick="renderTab('reports')">Full report →</a>
           </div>
-          ${products.length === 0
-            ? `<div style="padding:20px 0;color:var(--ink-3);font-size:13px;">Loading products…</div>`
-            : products.slice().sort((a,b) => (b.sold||0)-(a.sold||0)).slice(0,6).map((p, i, arr) => {
-                const maxSold = Math.max(...arr.map(x => x.sold || 0), 1);
-                return `
-                  <div style="display: grid; grid-template-columns: 22px 36px 1fr auto; gap: 10px; padding: 8px 0; align-items: center; border-bottom: 1px solid var(--rule);">
-                    <span style="font-family: var(--display); color: var(--ink-3); font-size: 13px;">${i+1}</span>
-                    <div style="width: 36px; height: 36px; background: var(--bg-sub); border-radius: var(--radius); overflow: hidden;"><img src="${p.img}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'"/></div>
-                    <div>
-                      <div style="font-size: 13px; font-weight: 600; line-height: 1.1">${p.en}</div>
-                      <div class="bar" style="margin-top: 5px; height: 4px;"><i style="width: ${((p.sold||0)/maxSold)*100}%"></i></div>
-                    </div>
-                    <div style="text-align: right; font-size: 12px;"><strong>${p.sold||0}</strong> sold<br/><span style="color: var(--ok); font-size: 10px;">${AD.rupee((p.sold||0)*p.price)}</span></div>
-                  </div>
-                `;
-              }).join("")
-          }
+          ${products.slice().sort((a,b) => (b.sold||0)-(a.sold||0)).slice(0,6).map((p, i, arr) => {
+            const max = Math.max(...arr.map(x => x.sold||0));
+            return `
+              <div style="display: grid; grid-template-columns: 22px 36px 1fr auto; gap: 10px; padding: 8px 0; align-items: center; border-bottom: 1px solid var(--rule);">
+                <span style="font-family: var(--display); color: var(--ink-3); font-size: 13px;">${i+1}</span>
+                <div style="width: 36px; height: 36px; background: var(--bg-sub); border-radius: var(--radius); overflow: hidden;"><img src="${p.img}" style="width: 100%; height: 100%; object-fit: cover;"/></div>
+                <div>
+                  <div style="font-size: 13px; font-weight: 600; line-height: 1.1">${p.en}</div>
+                  <div class="bar" style="margin-top: 5px; height: 4px;"><i style="width: ${((p.sold||0)/max)*100}%"></i></div>
+                </div>
+                <div style="text-align: right; font-size: 12px;"><strong>${p.sold||0}</strong> sold<br/><span style="color: var(--ok); font-size: 10px;">${AD.rupee((p.sold||0)*p.price)}</span></div>
+              </div>
+            `;
+          }).join("")}
         </div>
       </div>
 
@@ -184,7 +151,7 @@
           <div class="chart-head">
             <div>
               <div class="lbl">Low stock alerts</div>
-              <h3>${lowStock.length} item${lowStock.length !== 1 ? "s" : ""} need attention</h3>
+              <h3>${lowStock.length} items need attention</h3>
             </div>
             <a class="btn btn-ghost btn-sm" onclick="renderTab('catalog')">Catalog →</a>
           </div>
@@ -192,10 +159,10 @@
             ? `<div style="padding: 20px 0; color: var(--ink-3); font-size: 13px;">✓ All products are well-stocked.</div>`
             : lowStock.slice(0, 5).map(p => `
               <div style="display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; padding: 8px 0; align-items: center; border-bottom: 1px solid var(--rule);">
-                <div style="width: 36px; height: 36px; background: var(--bg-sub); border-radius: var(--radius); overflow: hidden;"><img src="${p.img}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'"/></div>
+                <div style="width: 36px; height: 36px; background: var(--bg-sub); border-radius: var(--radius); overflow: hidden;"><img src="${p.img}" style="width: 100%; height: 100%; object-fit: cover;"/></div>
                 <div>
                   <div style="font-size: 13px; font-weight: 600;">${p.en}</div>
-                  <div style="font-size: 11px; color: var(--ink-3);">${p.hi || ""}</div>
+                  <div style="font-size: 11px; color: var(--ink-3);">${p.hi || ''}</div>
                 </div>
                 <div style="text-align: right;">
                   <div style="font-size: 13px; font-weight: 700; color: var(--danger);">${p.stock} left</div>
@@ -214,15 +181,14 @@
             </div>
           </div>
           ${(() => {
-            const allReviews = AD.reviews();
-            const reviewPending = Array.isArray(allReviews) ? allReviews.filter(r => r.status === "pending").length : 0;
-            const reviewFlagged = Array.isArray(allReviews) ? allReviews.filter(r => r.status === "flagged").length : 0;
+            const reviewPending = AD.reviews().filter(r => r.status === "pending").length;
+            const reviewFlagged = AD.reviews().filter(r => r.status === "flagged").length;
             const tasks = [
-              { ic: "📦", t: `${packingCount} order${packingCount !== 1 ? "s" : ""} need packing`, link: "orders" },
-              { ic: "★",  t: `${reviewPending} review${reviewPending !== 1 ? "s" : ""} pending approval`, link: "reviews" },
-              { ic: "⚠",  t: `${reviewFlagged} review${reviewFlagged !== 1 ? "s" : ""} flagged for moderation`, link: "reviews" },
-              { ic: "📂", t: `${BB.categories ? BB.categories.length : 0} categories active`, link: "categories" },
-              { ic: "📦", t: `${products.length} products in catalog`, link: "catalog" },
+              { ic: "📦", t: `${orders.filter(o => !o.status || o.status === "Packing").length} orders need packing`, link: "orders" },
+              { ic: "★",  t: `${reviewPending} reviews pending approval`, link: "reviews" },
+              { ic: "⚠",  t: `${reviewFlagged} reviews flagged for moderation`, link: "reviews" },
+              { ic: "📊", t: `Last month's GST report due 11 days`, link: "reports" },
+              { ic: "🎁", t: `Diwali coupon DIWALI20 expires in 30 days`, link: "coupons" },
             ];
             return tasks.map(t => `
               <div onclick="renderTab('${t.link}')" style="display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--rule); cursor: pointer; align-items: center;">

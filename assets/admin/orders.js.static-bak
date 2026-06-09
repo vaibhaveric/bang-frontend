@@ -268,19 +268,15 @@
     openModal(html);
   };
 
-  AdminPages.orders._setStatus = async function(id, status) {
-    try {
-      if (window.ADMIN_API) {
-        await ADMIN_API.updateOrderStatus(id, status);
-      } else {
-        const orders = BB_APP.orders.read();
-        const o = orders.find(x => x.id === id);
-        if (o) { o.status = status; localStorage.setItem("bb_orders_v1", JSON.stringify(orders)); }
-      }
-      BB_APP.toast(`Order ${id} → ${status}`);
-      AdminPages.orders._open(id);
-      updateBadges();
-    } catch (e) { BB_APP.toast("Error: " + e.message); }
+  AdminPages.orders._setStatus = function(id, status) {
+    const orders = BB_APP.orders.read();
+    const o = orders.find(x => x.id === id);
+    if (!o) return;
+    o.status = status;
+    localStorage.setItem("bb_orders_v1", JSON.stringify(orders));
+    BB_APP.toast(`Order ${id} → ${status}`);
+    AdminPages.orders._open(id);
+    updateBadges();
   };
 
   AdminPages.orders._cancel = function(id) {

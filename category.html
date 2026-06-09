@@ -196,26 +196,39 @@
 
   <script src="assets/catalog.js"></script>
   <script src="assets/app.js"></script>
+  <script src="assets/api.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const slug = params.get("slug") || "sweets";
-    const cat = BB_APP.find.category(slug) || BB.categories[0];
-    let products = BB_APP.find.byCategory(cat.slug);
+    let cat = null;
+    let products = [];
+    let lastSort = "featured";
 
-    document.title = `${cat.en} (${cat.hi}) — Bangali Sweets, Bhind`;
-    document.getElementById("page-desc").setAttribute("content", `${cat.desc} Order online from Bangali Sweets, Bhind.`);
+    BB_APP.mount({ nav: slug });
 
-    BB_APP.mount({ nav: cat.slug });
+    function init() {
+      cat = BB_APP.find.category(slug);
+      if (!cat) {
+        // Catalogue not loaded yet — show a placeholder, re-run on bb:catalogue-loaded.
+        document.getElementById("grid").innerHTML = `<p class="muted" style="padding:24px 0">Loading products…</p>`;
+        return;
+      }
+      products = BB_APP.find.byCategory(cat.slug);
 
-    document.getElementById("banner-img").src = cat.hero;
-    document.getElementById("banner-img").alt = cat.en;
-    document.getElementById("crumb-name").textContent = cat.en;
-    document.getElementById("cat-hi").textContent = cat.hi;
-    document.getElementById("cat-en").textContent = cat.en;
-    document.getElementById("cat-desc").textContent = cat.desc;
-    document.getElementById("result-count").innerHTML = `<strong>${products.length}</strong> products`;
+      document.title = `${cat.en} (${cat.hi}) — Bangali Sweets, Bhind`;
+      document.getElementById("page-desc").setAttribute("content", `${cat.desc} Order online from Bangali Sweets, Bhind.`);
+      document.getElementById("banner-img").src = cat.hero;
+      document.getElementById("banner-img").alt = cat.en;
+      document.getElementById("crumb-name").textContent = cat.en;
+      document.getElementById("cat-hi").textContent = cat.hi;
+      document.getElementById("cat-en").textContent = cat.en;
+      document.getElementById("cat-desc").textContent = cat.desc;
+      document.getElementById("result-count").innerHTML = `<strong>${products.length}</strong> products`;
+      render(lastSort);
+    }
 
     function render(sort) {
+      lastSort = sort || "featured";
       let list = [...products];
       if (sort === "price-asc") list.sort((a,b) => a.price - b.price);
       else if (sort === "price-desc") list.sort((a,b) => b.price - a.price);
@@ -240,7 +253,8 @@
         </article>
       `).join("");
     }
-    render("featured");
+    init();
+    window.addEventListener("bb:catalogue-loaded", init);
   </script>
 </body>
 </html>
