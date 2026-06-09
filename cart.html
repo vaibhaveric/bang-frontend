@@ -7,7 +7,7 @@
   <meta name="description" content="Review your bag before checkout at Bangali Sweets."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Manrope:wght@400;500;600;700;800&family=Hind:wght@400;500;600;700&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@400;500;600;700;800&family=Hind:wght@400;500;600;700&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="assets/site.css"/>
   <style>
     .cart-wrap { max-width: 1180px; margin: 0 auto; padding: 32px 32px 80px; }
@@ -128,8 +128,19 @@
 
     function render() {
       const cart = BB_APP.cart.read();
-      const items = cart.map(c => ({ ...BB_APP.find.product(c.id), qty: c.qty })).filter(i => i.id);
-      const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+      const items = cart.map(c => {
+        const p = BB_APP.find.product(c.id);
+        if (!p) return null;
+        const factor = c.weight || 1;          // weight-priced: scale per-kg price
+        return {
+          ...p, qty: c.qty,
+          weight: c.weight, weightLabel: c.weightLabel,
+          key: BB_APP.cart.key(c),
+          linePrice: p.price * factor,         // effective price for one box
+          lineMrp: (p.mrp || p.price) * factor,
+        };
+      }).filter(Boolean);
+      const subtotal = items.reduce((s, i) => s + i.linePrice * i.qty, 0);
       const itemCount = items.reduce((s, i) => s + i.qty, 0);
       document.getElementById("count").textContent = `— ${itemCount} item${itemCount !== 1 ? 's' : ''}`;
 
@@ -160,19 +171,19 @@
                 <div>
                   <div class="hi">${i.hi}</div>
                   <div class="nm"><a href="product.html?id=${i.id}">${i.en}</a></div>
-                  <div class="meta">${i.unit || i.pieces || ''} · ${BB_APP.rupee(i.price)} each</div>
+                  <div class="meta">${i.weightLabel || i.unit || i.pieces || ''} · ${BB_APP.rupee(Math.round(i.linePrice))} each</div>
                   <div class="actions">
                     <div class="stepper">
-                      <button onclick="BB_APP.cart.update('${i.id}', ${i.qty - 1}); render()">−</button>
+                      <button onclick="BB_APP.cart.update('${i.key}', ${i.qty - 1}); render()">−</button>
                       <span class="v">${i.qty}</span>
-                      <button onclick="BB_APP.cart.update('${i.id}', ${i.qty + 1}); render()">+</button>
+                      <button onclick="BB_APP.cart.update('${i.key}', ${i.qty + 1}); render()">+</button>
                     </div>
-                    <span class="remove" onclick="BB_APP.cart.remove('${i.id}'); render()">Remove</span>
+                    <span class="remove" onclick="BB_APP.cart.remove('${i.key}'); render()">Remove</span>
                   </div>
                 </div>
                 <div class="price">
-                  ${BB_APP.rupee(i.price * i.qty)}
-                  <span class="mrp">₹${(i.mrp * i.qty).toLocaleString('en-IN')}</span>
+                  ${BB_APP.rupee(Math.round(i.linePrice * i.qty))}
+                  <span class="mrp">₹${Math.round(i.lineMrp * i.qty).toLocaleString('en-IN')}</span>
                 </div>
               </div>
             `).join("")}
@@ -213,6 +224,8 @@
 
     render();
     window.addEventListener("bb:cart", render);
+    // Cart lines need live product details (price/img); re-render once the API catalogue loads.
+    window.addEventListener("bb:catalogue-loaded", render);
   </script>
 </body>
 </html>

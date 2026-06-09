@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Manrope:wght@400;500;600;700;800&family=Hind:wght@400;500;600;700&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@400;500;600;700;800&family=Hind:wght@400;500;600;700&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="assets/site.css"/>
   <style>
     .ck-wrap { max-width: 1180px; margin: 0 auto; padding: 32px 32px 80px; }
@@ -315,7 +315,12 @@
 
     function calcTotals() {
       const cart = BB_APP.cart.read();
-      const items = cart.map(c => ({ ...BB_APP.find.product(c.id), qty: c.qty })).filter(i => i.id);
+      const items = cart.map(c => {
+        const p = BB_APP.find.product(c.id);
+        if (!p) return null;
+        const factor = c.weight || 1;          // weight-priced: scale per-kg price
+        return { ...p, qty: c.qty, weightLabel: c.weightLabel, price: p.price * factor };
+      }).filter(Boolean);
       const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
       const delivery = state.mode === "pickup" ? 0 : (subtotal >= 999 ? 0 : 89);
       const total = subtotal + delivery;
@@ -342,7 +347,7 @@
               <img src="${i.img}" alt=""/>
               <div>
                 <div class="n">${i.en}</div>
-                <div class="m">${i.unit || i.pieces || ''} × ${i.qty}</div>
+                <div class="m">${i.weightLabel || i.unit || i.pieces || ''} × ${i.qty}</div>
               </div>
               <div class="p">${BB_APP.rupee(i.price * i.qty)}</div>
             </div>
@@ -374,7 +379,7 @@
                 <span class="cc">+91</span>
                 <input id="phone" type="tel" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="98765 43210" value="${state.phone}"/>
               </div>
-              <p style="font-size: 12px; color: var(--ink-3); margin: 10px 0 0;">We'll send a 6-digit OTP. No password. By continuing you agree to our <a href="#" style="color: var(--accent); display: inline">Terms</a>.</p>
+              <p style="font-size: 12px; color: var(--ink-3); margin: 10px 0 0;">We'll send a 6-digit OTP. No password. By continuing you agree to our <a href="terms.html" style="color: var(--accent); display: inline">Terms</a>.</p>
               <label style="display: flex; align-items: center; gap: 10px; margin-top: 18px; font-size: 13px; color: var(--ink-2);">
                 <input type="checkbox" checked/> WhatsApp me order updates
               </label>

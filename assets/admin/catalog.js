@@ -136,50 +136,71 @@
     } catch (e) { BB_APP.toast("Error: " + e.message); }
   };
 
+  // ---------- full-screen form overlay ----------
+  function openFullscreen(html) {
+    let el = document.getElementById("fs-form");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "fs-form";
+      el.style.cssText = "position:fixed; inset:0; z-index:1000; background:var(--bg,#faf7f2); overflow-y:auto;";
+      document.body.appendChild(el);
+    }
+    el.innerHTML = `<div style="max-width:920px; margin:0 auto; padding:24px 24px 96px;">${html}</div>`;
+    el.style.display = "block";
+    document.body.style.overflow = "hidden";
+  }
+  function closeFullscreen() {
+    const el = document.getElementById("fs-form");
+    if (el) { el.style.display = "none"; el.innerHTML = ""; }
+    document.body.style.overflow = "";
+  }
+  AdminPages.catalog._close = closeFullscreen;
+
   AdminPages.catalog._openDrawer = function(id) {
-    const p = id ? products.find(x => x.id === id) : { en: "", hi: "", cat: "sweets", unit: "500g", price: 0, mrp: 0, stock: 0, img: "" };
+    const p = id ? products.find(x => x.id === id) : { en: "", hi: "", cat: "sweets", unit: "500g", price: 0, mrp: 0, stock: 0, img: "", images: [] };
     const isNew = !id;
-    openDrawer(`
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+    const WEIGHT_CATS = ["sweets", "namkeen", "dairy"];   // priced per kg, sold in 250g/500g/750g/1kg boxes
+    const isWeight = WEIGHT_CATS.includes(p.cat);
+    // working copy of the product's image list (first = primary)
+    AdminPages.catalog._imgs = (p.images && p.images.length) ? p.images.slice() : (p.img ? [p.img] : []);
+    openFullscreen(`
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; position:sticky; top:0; background:var(--bg,#faf7f2); padding:10px 0; z-index:2; border-bottom:1px solid var(--rule);">
         <div>
           <div class="lbl" style="font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .12em;">${isNew ? "New product" : "Edit product"}</div>
           <h2 style="margin-top: 4px;">${isNew ? "Add to catalog" : p.en}</h2>
         </div>
-        <button onclick="closeDrawer()" style="font-size: 24px; color: var(--ink-3);">×</button>
+        <button onclick="AdminPages.catalog._close()" class="btn btn-ghost btn-sm">✕ Close</button>
       </div>
-
-      ${!isNew ? `<div style="display: flex; gap: 14px; padding: 12px; background: var(--bg-sub); border-radius: var(--radius); margin-bottom: 18px;">
-        <img src="${p.img}" style="width: 60px; height: 60px; object-fit: cover; border-radius: var(--radius);"/>
-        <div>
-          <div style="font-family: ui-monospace, monospace; font-size: 11px; color: var(--ink-3);">${p.id}</div>
-          <div style="font-size: 13px; margin-top: 4px;">Sold ${p.sold || 0} · ${(p.rating || 0).toFixed(1)} ★ (${p.reviews || 0} reviews)</div>
-        </div>
-      </div>` : ''}
 
       <div class="field"><label class="label">Name (English)</label><input class="input" id="d-en" value="${p.en}"/></div>
       <div class="field"><label class="label">Name (हिंदी)</label><input class="input" style="font-family: var(--hindi);" id="d-hi" value="${p.hi||''}"/></div>
       <div class="field-row cols-2 field">
         <div><label class="label">Category</label>
-          <select class="input" id="d-cat">
+          <select class="input" id="d-cat" onchange="AdminPages.catalog._onCatChange()">
             ${BB.categories.map(cat => `<option value="${cat.slug}" ${cat.slug === p.cat ? 'selected' : ''}>${cat.en}</option>`).join("")}
           </select>
         </div>
-        <div><label class="label">Unit / Pieces</label><input class="input" id="d-unit" value="${p.unit || p.pieces || ''}"/></div>
+        <div id="d-unit-wrap" style="${isWeight ? 'display:none' : ''}"><label class="label">Unit / Pieces</label><input class="input" id="d-unit" value="${p.unit || p.pieces || ''}"/></div>
       </div>
       <div class="field-row cols-2 field">
-        <div><label class="label">Price (₹)</label><input class="input" id="d-price" type="number" value="${p.price}"/></div>
+        <div><label class="label" id="d-price-label">${isWeight ? 'Price (₹ per kg)' : 'Price (₹)'}</label><input class="input" id="d-price" type="number" value="${p.price}"/></div>
         <div><label class="label">MRP (₹)</label><input class="input" id="d-mrp" type="number" value="${p.mrp}"/></div>
       </div>
       <div class="field-row cols-2 field">
-        <div><label class="label">Stock</label><input class="input" id="d-stock" type="number" value="${p.stock || 0}"/></div>
+        <div><label class="label" id="d-stock-label">${isWeight ? 'Stock (kg)' : 'Stock'}</label><input class="input" id="d-stock" type="number" value="${p.stock || 0}"/></div>
         <div><label class="label">Tag</label><input class="input" id="d-tag" value="${p.tag || ''}" placeholder="Bestseller / Festive / Limited"/></div>
       </div>
       <div class="field-row cols-2 field">
         <div><label class="label">HSN code</label><input class="input" id="d-hsn" value="${p.hsn || '1704'}" placeholder="1704"/></div>
         <div><label class="label">GST %</label><input class="input" id="d-gst" type="number" value="${p.gst || 5}" placeholder="5"/></div>
       </div>
-      <div class="field"><label class="label">Image URL</label><input class="input" id="d-img" value="${p.img || ''}"/></div>
-      ${p.img ? `<img src="${p.img}" style="width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: var(--radius); margin-bottom: 14px;"/>` : ''}
+
+      <div class="field">
+        <label class="label">Product images — upload one or more (first is the primary image)</label>
+        <input type="file" accept="image/*" multiple onchange="AdminPages.catalog._uploadImages(this)"/>
+        <div id="d-img-grid" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px;"></div>
+      </div>
+
       <div class="field"><label class="label">Description</label><textarea class="input" id="d-desc" rows="3">${p.desc || ''}</textarea></div>
       <div class="field"><label class="label">Ingredients</label><textarea class="input" id="d-ing" rows="2">${p.ingredients || ''}</textarea></div>
       <div class="field"><label class="label">Shelf life &amp; storage</label><input class="input" id="d-shelf" value="${p.shelf || ''}"/></div>
@@ -193,11 +214,57 @@
         ${!isNew ? `<button class="btn btn-ghost" onclick="AdminPages.catalog._delete('${id}')" style="border-color: var(--danger); color: var(--danger)">Delete</button>` : ''}
       </div>
     `);
+    AdminPages.catalog._renderImages();
+  };
+
+  AdminPages.catalog._renderImages = function() {
+    const grid = document.getElementById("d-img-grid");
+    if (!grid) return;
+    const imgs = AdminPages.catalog._imgs || [];
+    grid.innerHTML = imgs.length ? imgs.map((url, i) => `
+      <div style="position:relative; width:96px; height:96px; border-radius:var(--radius); overflow:hidden; border:1px solid ${i===0?'var(--accent)':'var(--rule)'};">
+        <img src="${url}" style="width:100%; height:100%; object-fit:cover;"/>
+        ${i===0 ? `<span style="position:absolute; left:4px; bottom:4px; background:var(--accent); color:#fff; font-size:9px; padding:1px 5px; border-radius:99px;">Primary</span>` : ''}
+        <button onclick="AdminPages.catalog._removeImage(${i})" title="Remove" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,.6); color:#fff; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer; line-height:1;">×</button>
+      </div>
+    `).join("") : `<span style="font-size:13px; color:var(--ink-3);">No images yet — upload above.</span>`;
+  };
+
+  AdminPages.catalog._uploadImages = async function(input) {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    const grid = document.getElementById("d-img-grid");
+    if (grid) grid.insertAdjacentHTML("beforeend", `<span id="d-img-uploading" style="font-size:13px;color:var(--ink-3); align-self:center;">Uploading ${files.length}…</span>`);
+    for (const f of files) {
+      try {
+        const url = await ADMIN_API.uploadImage(f);
+        (AdminPages.catalog._imgs = AdminPages.catalog._imgs || []).push(url);
+      } catch (e) { BB_APP.toast("Upload failed: " + e.message); }
+    }
+    input.value = "";
+    AdminPages.catalog._renderImages();
+  };
+
+  AdminPages.catalog._removeImage = function(i) {
+    (AdminPages.catalog._imgs || []).splice(i, 1);
+    AdminPages.catalog._renderImages();
+  };
+
+  // Toggle the form between unit-priced and per-kg (weight) categories live as the dropdown changes.
+  AdminPages.catalog._onCatChange = function() {
+    const isW = ["sweets", "namkeen", "dairy"].includes(document.getElementById("d-cat").value);
+    const unitWrap = document.getElementById("d-unit-wrap");
+    if (unitWrap) unitWrap.style.display = isW ? "none" : "";
+    const pl = document.getElementById("d-price-label");
+    if (pl) pl.textContent = isW ? "Price (₹ per kg)" : "Price (₹)";
+    const sl = document.getElementById("d-stock-label");
+    if (sl) sl.textContent = isW ? "Stock (kg)" : "Stock";
   };
 
   AdminPages.catalog._save = async function(id) {
     const get = k => document.getElementById("d-"+k)?.value || "";
     const catSlug = get("cat");
+    const isWeightCat = ["sweets", "namkeen", "dairy"].includes(catSlug);
     // Resolve categoryId from cached categories
     const catEntry = (ADMIN_API?.getCache()?.categories || []).find(c => c.slug === catSlug);
     const existing = id ? products.find(p => p.id === id) : null;
@@ -205,13 +272,15 @@
       ...(existing || {}),
       id: id || ("p" + Date.now()),
       en: get("en"), hi: get("hi"), cat: catSlug,
-      unit: get("unit"),
+      unit: isWeightCat ? "per kg" : get("unit"),
       price: Number(get("price")) || 0,
       mrp: Number(get("mrp")) || 0,
       stock: Number(get("stock")) || 0,
       tag: get("tag") || undefined,
       hsn: get("hsn"), gst: Number(get("gst")) || 5,
-      img: get("img"), desc: get("desc"),
+      img: (AdminPages.catalog._imgs || [])[0] || "",
+      images: AdminPages.catalog._imgs || [],
+      desc: get("desc"),
       ingredients: get("ing"), shelf: get("shelf"),
       seoTitle: get("seo-title"), seoDesc: get("seo-desc"),
       _categoryId: catEntry ? catEntry.id : (existing?._categoryId),
@@ -227,7 +296,7 @@
         } else { products.unshift(obj); }
         AD.saveProducts(products);
       }
-      closeDrawer(); renderTab("catalog");
+      AdminPages.catalog._close(); renderTab("catalog");
       BB_APP.toast(id ? "Product updated ✦" : "Product added");
     } catch (e) { BB_APP.toast("Save failed: " + e.message); }
   };
@@ -243,7 +312,7 @@
         products = products.filter(p => p.id !== id);
         AD.saveProducts(products);
       }
-      closeDrawer(); renderTab("catalog");
+      AdminPages.catalog._close(); renderTab("catalog");
       BB_APP.toast("Product deleted");
     } catch (e) { BB_APP.toast("Delete failed: " + e.message); }
   };

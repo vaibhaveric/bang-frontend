@@ -20,7 +20,7 @@
   --berry: #8a2a3a;
   --danger: #b03a3a;
   --ok: #2f6a3a;
-  --display: "Cormorant Garamond", Georgia, serif;
+  --display: "DM Serif Display", Georgia, serif;
   --sans: "Manrope", ui-sans-serif, sans-serif;
   --hindi: "Tiro Devanagari Hindi", "Hind", serif;
   --hindi-sans: "Hind", "Tiro Devanagari Hindi", serif;
@@ -537,4 +537,58 @@ table.table tr:hover td { background: color-mix(in srgb, var(--bg) 50%, var(--pa
 @media (max-width: 480px) {
   .h1 { font-size: 44px; }
   .h2 { font-size: 28px; }
+}
+
+/* ============================== BACKDROP LOADER ============================== */
+/* Smart, reference-counted overlay. JS shows it only after a short delay (so
+   fast calls never flash) and keeps it up for a minimum time (so it never
+   flickers). Auto-wired to mutating backend calls; also callable manually. */
+.bb-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(45, 30, 15, .42);
+  -webkit-backdrop-filter: blur(3px) saturate(118%);
+  backdrop-filter: blur(3px) saturate(118%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .28s ease, visibility .28s ease;
+}
+.bb-loader.is-on { opacity: 1; visibility: visible; }
+.bb-loader__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 30px 40px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  transform: translateY(8px) scale(.97);
+  transition: transform .28s ease;
+}
+.bb-loader.is-on .bb-loader__card { transform: translateY(0) scale(1); }
+.bb-loader__ring {
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  border: 3px solid var(--rule);
+  border-top-color: var(--gold);
+  animation: bbSpin .8s linear infinite;
+}
+.bb-loader__msg {
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 19px;
+  line-height: 1.2;
+  color: var(--ink);
+  text-align: center;
+}
+@keyframes bbSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .bb-loader__ring { animation-duration: 1.8s; }
+  .bb-loader, .bb-loader__card { transition: none; }
 }

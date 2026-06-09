@@ -26,6 +26,11 @@
   function writeAnalytics(a){ localStorage.setItem(KEY_ANALYTICS, JSON.stringify(a)); }
 
   // ============================== CART ==============================
+  // A cart line is identified by product id + weight (kg) for weight-priced items
+  // (sweets/namkeen/dairy). Non-weight items have no `weight`, so their key is just
+  // the id — keeping all existing id-based update/remove calls working unchanged.
+  function cartKey(i) { return i.weight ? i.id + "|" + i.weight : i.id; }
+
   function cartCount() {
     return readCart().reduce((s, i) => s + i.qty, 0);
   }
@@ -33,32 +38,38 @@
     const cart = readCart();
     return cart.reduce((s, i) => {
       const p = findProduct(i.id);
-      return s + (p ? p.price * i.qty : 0);
+      if (!p) return s;
+      const factor = i.weight || 1;   // weight-priced: price is per kg, factor scales it
+      return s + p.price * factor * i.qty;
     }, 0);
   }
-  function addToCart(id, qty = 1) {
+  function addToCart(id, qty = 1, opts = {}) {
     const cart = readCart();
-    const existing = cart.find(i => i.id === id);
+    const line = { id, qty };
+    if (opts.weight) { line.weight = opts.weight; line.weightLabel = opts.weightLabel || ""; }
+    const key = cartKey(line);
+    const existing = cart.find(i => cartKey(i) === key);
     if (existing) existing.qty += qty;
-    else cart.push({ id, qty });
+    else cart.push(line);
     writeCart(cart);
     const p = findProduct(id);
-    toast(`Added <b>${p ? p.en : "item"}</b> to bag`);
+    const lbl = opts.weightLabel ? ` (${opts.weightLabel})` : "";
+    toast(`Added <b>${p ? p.en : "item"}${lbl}</b> to bag`);
     trackEvent("add_to_cart", { id });
   }
-  function updateCartQty(id, qty) {
+  function updateCartQty(key, qty) {
     const cart = readCart();
-    const it = cart.find(i => i.id === id);
+    const it = cart.find(i => cartKey(i) === key);
     if (!it) return;
     if (qty <= 0) {
-      writeCart(cart.filter(i => i.id !== id));
+      writeCart(cart.filter(i => cartKey(i) !== key));
     } else {
       it.qty = qty;
       writeCart(cart);
     }
   }
-  function removeFromCart(id) {
-    writeCart(readCart().filter(i => i.id !== id));
+  function removeFromCart(key) {
+    writeCart(readCart().filter(i => cartKey(i) !== key));
   }
   function clearCart() { writeCart([]); }
 
@@ -86,6 +97,105 @@
     setTimeout(() => { el.style.opacity = "0"; el.style.transition = "opacity .3s"; }, 2200);
     setTimeout(() => el.remove(), 2600);
   }
+
+  // ============================== BACKDROP LOADER ==============================
+  // Reference-counted, full-screen backdrop with a branded spinner.
+  // "Smart" = shows only after a brief delay (fast ops never flash it) and stays
+  // up for a minimum time once shown (no flicker). Concurrent calls are stacked.
+  const LOADER_DELAY = 180;  // ms to wait before showing — quick calls finish first
+  const LOADER_MIN   = 450;  // ms to keep it visible once shown
+  let loaderCount = 0, loaderEl = null, loaderShowTimer = null, loaderHideTimer = null, loaderShownAt = 0;
+
+  function ensureLoaderEl() {
+    if (loaderEl) return loaderEl;
+    loaderEl = document.createElement("div");
+    loaderEl.className = "bb-loader";
+    loaderEl.setAttribute("role", "status");
+    loaderEl.setAttribute("aria-live", "polite");
+    loaderEl.setAttribute("aria-hidden", "true");
+    loaderEl.innerHTML = `<div class="bb-loader__card"><div class="bb-loader__ring"></div><div class="bb-loader__msg"></div></div>`;
+    document.body.appendChild(loaderEl);
+    return loaderEl;
+  }
+
+  function paintLoader(on, msg) {
+    const el = ensureLoaderEl();
+    if (msg != null) el.querySelector(".bb-loader__msg").textContent = msg;
+    el.classList.toggle("is-on", on);
+    el.setAttribute("aria-hidden", on ? "false" : "true");
+  }
+
+  function showLoader(msg = "Just a moment…") {
+    loaderCount++;
+    clearTimeout(loaderHideTimer);
+    if (loaderShownAt) {
+      paintLoader(true, msg);                // already visible → just refresh the message
+    } else if (!loaderShowTimer) {
+      loaderShowTimer = setTimeout(() => {
+        loaderShowTimer = null;
+        loaderShownAt = Date.now();
+        paintLoader(true, msg);
+      }, LOADER_DELAY);
+    }
+  }
+
+  function hideLoader() {
+    loaderCount = Math.max(0, loaderCount - 1);
+    if (loaderCount > 0) return;             // other operations still running
+    if (loaderShowTimer) {                   // never actually shown → cancel pending show
+      clearTimeout(loaderShowTimer);
+      loaderShowTimer = null;
+      return;
+    }
+    const wait = Math.max(0, LOADER_MIN - (Date.now() - loaderShownAt));
+    loaderHideTimer = setTimeout(() => {
+      if (loaderCount === 0) { paintLoader(false); loaderShownAt = 0; }
+    }, wait);
+  }
+
+  // Wrap any promise/async fn so the loader auto-shows for its duration.
+  async function duringLoader(work, msg) {
+    showLoader(msg);
+    try { return await (typeof work === "function" ? work() : work); }
+    finally { hideLoader(); }
+  }
+
+  function loaderMessageFor(url, method) {
+    if (url.includes("/auth/send-otp"))    return "Sending OTP…";
+    if (url.includes("/auth/verify-otp"))  return "Verifying…";
+    if (url.includes("/auth/admin"))       return "Signing in…";
+    if (url.includes("/upload-image"))     return "Uploading image…";
+    if (url.includes("/orders"))           return "Placing your order…";
+    if (url.includes("/coupons"))          return "Applying coupon…";
+    if (url.includes("/addresses"))        return "Saving address…";
+    if (url.includes("/profile"))          return "Saving…";
+    if (method.toUpperCase() === "DELETE") return "Removing…";
+    return "Just a moment…";
+  }
+
+  // Smart auto-loader: transparently wrap mutating backend calls (POST/PUT/PATCH/
+  // DELETE to /api/). Every blocking action — orders, OTP, coupons, profile,
+  // admin — gets the backdrop with no per-call wiring. Background GETs (catalogue,
+  // product/search render) are left alone; they use their own inline placeholders.
+  (function patchFetchForLoader() {
+    if (window.__bbLoaderFetch) return;
+    window.__bbLoaderFetch = true;
+    const orig = window.fetch.bind(window);
+    const MUTATING = /^(POST|PUT|PATCH|DELETE)$/i;
+    window.fetch = function (input, init) {
+      const method = (init && init.method) || (typeof input === "object" && input && input.method) || "GET";
+      const url    = typeof input === "string" ? input : (input && input.url) || "";
+      // Backend call? matches the configured API base (read at call time, after
+      // env.js loads) or a "/api/" path — so it works in dev and production.
+      const base = (window.BB_CONFIG && window.BB_CONFIG.API_BASE) || "/api";
+      const isBackend = url.includes("/api/") || (base && url.indexOf(base) === 0);
+      if (isBackend && MUTATING.test(method)) {
+        showLoader(loaderMessageFor(url, method));
+        return orig(input, init).finally(hideLoader);
+      }
+      return orig(input, init);
+    };
+  })();
 
   // ============================== ANALYTICS ==============================
   function trackPageView(path) {
@@ -146,14 +256,10 @@
         <a class="logo" href="index.html" aria-label="Bangali Sweets — Home">
           <span class="seal">B</span>
           <span>
-            <span class="nm">Bangali Sweets</span>
+            <span class="nm">Bangali Sweets and Dry Fruits</span>
             <span class="nm-hi" style="display:block">बंगाली स्वीट्स</span>
           </span>
         </a>
-        <form class="search" role="search" onsubmit="event.preventDefault();window.BB_APP.search(this.querySelector('input').value)">
-          <span class="ico">${ICONS.search}</span>
-          <input type="search" placeholder="Search Kaju Katli, hampers, dry fruits…" aria-label="Search products"/>
-        </form>
         <nav class="utils" aria-label="User">
           <a href="${STORE.shop.mapsUrl}" target="_blank" rel="noopener" title="Outlet location">
             ${ICONS.pin}<span class="lbl">Bhind, MP</span>
@@ -229,7 +335,7 @@
       </div>
       <div class="legal">
         <span>© 2026 Bangali Sweets &amp; Dryfruits, Bhind · GSTIN ${STORE.shop.gstin} · FSSAI ${STORE.shop.fssai}</span>
-        <span><a href="#" style="display:inline">Privacy</a> · <a href="#" style="display:inline">Terms</a> · <a href="#" style="display:inline">Refunds</a></span>
+        <span><a href="privacy.html" style="display:inline">Privacy</a> · <a href="terms.html" style="display:inline">Terms</a> · <a href="terms.html#cancel" style="display:inline">Refunds</a></span>
       </div>
     `;
   }
@@ -305,7 +411,8 @@
   // ============================== PUBLIC ==============================
   window.BB_APP = {
     mount, search, toast, rupee,
-    cart: { read: readCart, count: cartCount, total: cartTotal, add: addToCart, update: updateCartQty, remove: removeFromCart, clear: clearCart },
+    loader: { show: showLoader, hide: hideLoader, during: duringLoader },
+    cart: { read: readCart, count: cartCount, total: cartTotal, add: addToCart, update: updateCartQty, remove: removeFromCart, clear: clearCart, key: cartKey },
     auth: { read: readAuth, login, logout },
     orders: { read: readOrders, place: placeOrder },
     analytics: { read: readAnalytics, track: trackEvent, trackPageView, trackProductView },

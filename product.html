@@ -7,7 +7,7 @@
   <meta id="page-desc" name="description" content="Order online from Bangali Sweets, Bhind."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Manrope:wght@400;500;600;700;800&family=Hind:wght@400;500;600;700&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@400;500;600;700;800&family=Hind:wght@400;500;600;700&family=Tiro+Devanagari+Hindi:ital@0;1&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="assets/site.css"/>
   <style>
     .pd-wrap { max-width: 1320px; margin: 0 auto; padding: 0 32px; }
@@ -198,6 +198,29 @@
     let p = null;
     let cat = null;
     let qty = 1;
+    const WEIGHT_CATS = ["sweets", "namkeen", "dairy"];   // priced per kg, sold in boxes
+    const WEIGHTS = [["250g", 0.25], ["500g", 0.5], ["750g", 0.75], ["1kg", 1]];
+    let selW = 0.5, selLabel = "500g";                    // (legacy, unused by per-weight steppers)
+    window.selectWeight = function(w, label) { selW = w; selLabel = label; render(); };
+
+    // ---- per-weight cart helpers (weight categories) ----
+    function cartQtyFor(w) {
+      const key = p.id + "|" + w;
+      const line = BB_APP.cart.read().find(i => BB_APP.cart.key(i) === key);
+      return line ? line.qty : 0;
+    }
+    window.wAdjust = function(w, label, delta) {
+      const cur = cartQtyFor(w);
+      if (delta > 0) BB_APP.cart.add(p.id, 1, { weight: w, weightLabel: label });
+      else BB_APP.cart.update(p.id + "|" + w, cur - 1);
+      render();   // refresh the on-page quantities + bag summary
+    };
+    function bagSummaryHtml() {
+      const sel = WEIGHTS.map(([label, w]) => ({ label, w, q: cartQtyFor(w) })).filter(x => x.q > 0);
+      if (!sel.length) return '<span style="font-size:13px;color:var(--ink-3)">No boxes added yet — tap + above.</span>';
+      const total = sel.reduce((s, x) => s + p.price * x.w * x.q, 0);
+      return `In your bag: ${sel.map(x => `<strong>${x.label} × ${x.q}</strong>`).join(" · ")} — ${BB_APP.rupee(Math.round(total))}`;
+    }
 
     BB_APP.mount({ nav: null });
 
@@ -220,13 +243,19 @@
     }
 
     function render() {
+      const isWeight = WEIGHT_CATS.includes(p.cat);
       const stars = "★".repeat(Math.round(p.rating || 4)) + "☆".repeat(5 - Math.round(p.rating || 4));
       const disc = Math.round(((p.mrp - p.price) / p.mrp) * 100);
+      const boxPrice = isWeight ? p.price * selW : p.price;   // price for the selected weight box
+      const boxMrp   = isWeight ? p.mrp * selW : p.mrp;
+      const addExpr  = isWeight
+        ? `BB_APP.cart.add('${p.id}', qty, {weight:${selW}, weightLabel:'${selLabel}'})`
+        : `BB_APP.cart.add('${p.id}', qty)`;
       document.getElementById("pd-top").innerHTML = `
         <div class="gallery">
           <div class="main"><img id="main-img" src="${p.img}" alt="${p.en} ${p.unit || ''}"/></div>
           <div class="thumbs">
-            ${[p.img, p.img, p.img, p.img].map((src, i) => `
+            ${(p.images && p.images.length ? p.images : [p.img]).map((src, i) => `
               <div class="thumb ${i === 0 ? 'active' : ''}" onclick="document.getElementById('main-img').src='${src}'; document.querySelectorAll('.thumb').forEach(t=>t.classList.remove('active')); this.classList.add('active');">
                 <img src="${src}" alt=""/>
               </div>
@@ -243,9 +272,38 @@
           </div>
           <p class="desc">${p.desc}</p>
 
+          ${isWeight ? `
           <div class="price-block">
             <span class="now">${BB_APP.rupee(p.price)}</span>
-            <span class="mrp">₹${p.mrp}</span>
+            <span class="unit">per kg</span>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:10px; margin: 8px 0 12px;">
+            ${WEIGHTS.map(([label, w]) => {
+              const q = cartQtyFor(w);
+              return `
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 14px; border:1px solid ${q>0?'var(--accent)':'var(--rule)'}; border-radius:var(--radius);">
+                <div style="display:flex; flex-direction:column;">
+                  <span style="font-weight:600;">${label}</span>
+                  <span style="font-size:12px; color:var(--ink-3);">${BB_APP.rupee(Math.round(p.price * w))} / box</span>
+                </div>
+                <div class="qty-stepper">
+                  <button onclick="wAdjust(${w}, '${label}', -1)" ${q===0?'disabled style="opacity:.35"':''}>−</button>
+                  <span class="v">${q}</span>
+                  <button onclick="wAdjust(${w}, '${label}', 1)">+</button>
+                </div>
+              </div>`;
+            }).join("")}
+          </div>
+          <div style="margin-bottom:14px;">${bagSummaryHtml()}</div>
+
+          <div class="actions">
+            <a class="btn btn-lg" href="cart.html">Go to bag →</a>
+            <a class="btn btn-gold btn-lg" href="checkout.html">Buy now →</a>
+          ` : `
+          <div class="price-block">
+            <span class="now">${BB_APP.rupee(Math.round(boxPrice))}</span>
+            <span class="mrp">₹${Math.round(boxMrp)}</span>
             <span class="off">${disc}% off</span>
             <span class="unit">${p.unit || p.pieces || ''}</span>
           </div>
@@ -260,8 +318,9 @@
           </div>
 
           <div class="actions">
-            <button class="btn btn-lg" onclick="BB_APP.cart.add('${p.id}', qty)">Add to bag</button>
-            <a class="btn btn-gold btn-lg" href="javascript:void(0)" onclick="BB_APP.cart.add('${p.id}', qty); setTimeout(()=>location.href='checkout.html', 400)">Buy now →</a>
+            <button class="btn btn-lg" onclick="${addExpr}">Add to bag</button>
+            <a class="btn btn-gold btn-lg" href="javascript:void(0)" onclick="${addExpr}; setTimeout(()=>location.href='checkout.html', 400)">Buy now →</a>
+          `}
             <button class="wishlist" aria-label="Add to wishlist">
               <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 10c0 5.65-7 10-7 10Z"/></svg>
             </button>

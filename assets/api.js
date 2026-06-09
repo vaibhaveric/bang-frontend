@@ -44,6 +44,7 @@
       price:  parseFloat(p.price),
       mrp:    parseFloat(p.mrp || p.price),
       img:    p.imageUrl || "",
+      images: p.images ? p.images.split(",").filter(Boolean) : (p.imageUrl ? [p.imageUrl] : []),
       unit:   p.unit || "",
       pieces: p.unit || "",
       stock:  p.stock,
@@ -175,7 +176,11 @@
   // ── Orders ────────────────────────────────────────────────────────────────
   async function placeOrder(payload) {
     const cart = window.BB_APP ? window.BB_APP.cart.read() : [];
-    const items = cart.map(c => ({ id: parseInt(c.id) || c.id, qty: c.qty }));
+    const items = cart.map(c => {
+      const item = { id: parseInt(c.id) || c.id, qty: c.qty };
+      if (c.weight) { item.weight = c.weight; item.weightLabel = c.weightLabel || ""; }  // weight-priced box
+      return item;
+    });
 
     const body = {
       name:       payload.name,
