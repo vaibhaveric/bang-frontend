@@ -13,7 +13,7 @@ function HomeA() {
       <section className="warm-grad-a" style={{padding:"56px 48px 64px", position:"relative"}}>
         <div style={{display:"grid", gridTemplateColumns:"1.05fr 0.95fr", gap:48, alignItems:"center"}}>
           <div>
-            <div className="eyebrow" style={{color:"var(--gold)"}}>Festive Edit · Diwali 2026</div>
+            {/*<div className="eyebrow" style={{color:"var(--gold)"}}>Festive Edit · Diwali 2026</div>*/}
             <h1 className="disp" style={{fontSize:84, lineHeight:0.95, margin:"18px 0 14px", fontWeight:500}}>
               Gifts that<br/>
               <span style={{fontStyle:"italic", color:"var(--accent)"}}>arrive with</span><br/>

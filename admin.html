@@ -39,18 +39,6 @@
           <a data-tab="coupons"><span class="ic">🎟</span>Coupons &amp; Promos</a>
         </div>
         <div class="section">
-          <div class="lbl">Grow</div>
-          <a data-tab="banners"><span class="ic">🎨</span>Banners &amp; CMS</a>
-          <a data-tab="reviews"><span class="ic">★</span>Reviews<span class="badge danger" id="reviews-badge">0</span></a>
-          <a data-tab="notifications"><span class="ic">💬</span>Notifications</a>
-        </div>
-        <div class="section">
-          <div class="lbl">Analyse</div>
-          <a data-tab="traffic"><span class="ic">🌐</span>Traffic &amp; funnel</a>
-          <a data-tab="customers"><span class="ic">👤</span>Customers</a>
-          <a data-tab="reports"><span class="ic">📈</span>Reports &amp; GST</a>
-        </div>
-        <div class="section">
           <div class="lbl">Setup</div>
           <a data-tab="staff"><span class="ic">👥</span>Staff &amp; roles</a>
           <a data-tab="outlets"><span class="ic">🏬</span>Outlets</a>
@@ -106,12 +94,6 @@
   <script src="assets/admin/catalog.js"></script>
   <script src="assets/admin/categories.js"></script>
   <script src="assets/admin/coupons.js"></script>
-  <script src="assets/admin/banners.js"></script>
-  <script src="assets/admin/reviews.js"></script>
-  <script src="assets/admin/notifications.js"></script>
-  <script src="assets/admin/traffic.js"></script>
-  <script src="assets/admin/customers.js"></script>
-  <script src="assets/admin/reports.js"></script>
   <script src="assets/admin/staff.js"></script>
   <script src="assets/admin/outlets.js"></script>
   <script src="assets/admin/shipping-mod.js"></script>
@@ -125,12 +107,6 @@
       catalog:       ["Admin / Catalog",       "Products &amp; stock"],
       categories:    ["Admin / Categories",    "Manage categories"],
       coupons:       ["Admin / Coupons",       "Coupons &amp; promotions"],
-      banners:       ["Admin / Banners",       "Homepage &amp; CMS"],
-      reviews:       ["Admin / Reviews",       "Review moderation"],
-      notifications: ["Admin / Notifications", "Customer messaging templates"],
-      traffic:       ["Admin / Analytics",     "Traffic &amp; funnel"],
-      customers:     ["Admin / Customers",     "Customer book"],
-      reports:       ["Admin / Reports",       "Reports, GST &amp; exports"],
       staff:         ["Admin / Staff",         "Team &amp; permissions"],
       outlets:       ["Admin / Outlets",       "Outlet management"],
       shipping:      ["Admin / Shipping",      "Shipping zones &amp; rates"],
@@ -143,12 +119,6 @@
       catalog:       { label: "+ New product",  fn: () => AdminPages.catalog._openDrawer() },
       categories:    { label: "+ New category", fn: () => alert("Add category — wire to backend") },
       coupons:       { label: "+ New coupon",   fn: () => AdminPages.coupons._openDrawer() },
-      banners:       { label: "Preview site",   fn: () => window.open("index.html", "_blank") },
-      reviews:       { label: "Bulk approve",   fn: () => AdminPages.reviews._bulkApprove() },
-      notifications: { label: "Send test",      fn: () => alert("Test message sent (mock)") },
-      traffic:       { label: "Export CSV",     fn: () => alert("Export — wire to backend") },
-      customers:     { label: "Export CSV",     fn: () => alert("Export — wire to backend") },
-      reports:       { label: "Export GST",     fn: () => AdminPages.reports._exportCSV() },
       staff:         { label: "+ Invite staff", fn: () => AdminPages.staff._openDrawer() },
       outlets:       { label: "+ New outlet",   fn: () => AdminPages.outlets._openDrawer() },
       shipping:      { label: "+ New zone",     fn: () => AdminPages.shipping._openDrawer() },
@@ -213,11 +183,6 @@
 
     function updateBadges() {
       document.getElementById("orders-badge").textContent = BB_APP.orders.read().length || 0;
-      const reviews = AD.reviews();
-      const pending = reviews.filter(r => r.status === "pending").length;
-      const reviewsBadge = document.getElementById("reviews-badge");
-      reviewsBadge.textContent = pending;
-      reviewsBadge.style.display = pending ? "" : "none";
     }
     window.updateBadges = updateBadges;
 

@@ -735,6 +735,9 @@
     window.render = render;
 
     render();
+    // Re-render once the live catalogue arrives so the order summary never shows
+    // dummy product data (prices/names) on a direct first load.
+    window.addEventListener("bb:catalogue-loaded", render);
   </script>
 </body>
 </html>

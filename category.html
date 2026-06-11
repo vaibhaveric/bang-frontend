@@ -42,9 +42,7 @@
       max-width: 1320px;
       margin: 0 auto;
       padding: 36px 32px 64px;
-      display: grid;
-      grid-template-columns: 240px 1fr;
-      gap: 36px;
+      display: block;
     }
 
     .filters {
@@ -146,36 +144,6 @@
     </section>
 
     <div class="cat-body">
-      <button class="filters-mobile-toggle" onclick="document.getElementById('filters').toggleAttribute('hidden')">Filter &amp; Sort ▾</button>
-
-      <aside class="filters" id="filters">
-        <div class="group">
-          <h3>Price</h3>
-          <label><input type="checkbox"/> Under ₹250 <span class="count">8</span></label>
-          <label><input type="checkbox"/> ₹250 – ₹500 <span class="count">14</span></label>
-          <label><input type="checkbox"/> ₹500 – ₹1000 <span class="count">9</span></label>
-          <label><input type="checkbox"/> Over ₹1000 <span class="count">5</span></label>
-        </div>
-        <div class="group">
-          <h3>Diet</h3>
-          <label><input type="checkbox"/> Pure veg <span class="count">36</span></label>
-          <label><input type="checkbox"/> Sugar-free <span class="count">3</span></label>
-          <label><input type="checkbox"/> Eggless <span class="count">4</span></label>
-        </div>
-        <div class="group">
-          <h3>Occasion</h3>
-          <label><input type="checkbox"/> Diwali <span class="count">12</span></label>
-          <label><input type="checkbox"/> Rakhi <span class="count">6</span></label>
-          <label><input type="checkbox"/> Wedding <span class="count">8</span></label>
-          <label><input type="checkbox"/> Corporate <span class="count">4</span></label>
-        </div>
-        <div>
-          <h3>Availability</h3>
-          <label><input type="checkbox"/> In stock <span class="count">34</span></label>
-          <label><input type="checkbox"/> Pre-order <span class="count">2</span></label>
-        </div>
-      </aside>
-
       <div class="grid-wrap">
         <div class="toolbar">
           <span class="count" id="result-count"></span>
@@ -198,6 +166,10 @@
   <script src="assets/app.js"></script>
   <script src="assets/env.js"></script>  <script src="assets/api.js"></script>
   <script>
+    // This page loads only its own category slice, so opt out of the catalogue-wide
+    // fetch (/categories + /products + /reviews) that api.js runs by default.
+    window.BB_SKIP_CATALOGUE = true;
+
     const params = new URLSearchParams(location.search);
     const slug = params.get("slug") || "sweets";
     let cat = null;
@@ -206,24 +178,41 @@
 
     BB_APP.mount({ nav: slug });
 
-    function init() {
-      cat = BB_APP.find.category(slug);
-      if (!cat) {
-        // Catalogue not loaded yet — show a placeholder, re-run on bb:catalogue-loaded.
-        document.getElementById("grid").innerHTML = `<p class="muted" style="padding:24px 0">Loading products…</p>`;
+    function applyBanner(c) {
+      cat = c;
+      document.title = `${c.en} (${c.hi}) — Bangali Sweets, Bhind`;
+      document.getElementById("page-desc").setAttribute("content", `${c.desc} Order online from Bangali Sweets, Bhind.`);
+      document.getElementById("banner-img").src = c.hero;
+      document.getElementById("banner-img").alt = c.en;
+      document.getElementById("crumb-name").textContent = c.en;
+      document.getElementById("cat-hi").textContent = c.hi;
+      document.getElementById("cat-en").textContent = c.en;
+      document.getElementById("cat-desc").textContent = c.desc;
+    }
+
+    async function init() {
+      // Render the banner from static catalogue meta first (instant), then refine it
+      // from the API response. Products come solely from the single category API call.
+      const staticMeta = BB_APP.find.category(slug);
+      if (staticMeta) applyBanner(staticMeta);
+
+      document.getElementById("grid").innerHTML = `<p class="muted" style="padding:24px 0">Loading products…</p>`;
+      try {
+        const resp = await BB_API.getProductsByCategory(slug);
+        products = resp.products;
+        if (resp.category) applyBanner(resp.category);
+      } catch (e) {
+        console.warn("[category] API fetch failed, falling back to cache:", e.message);
+        products = BB_APP.find.byCategory(slug);
+      }
+
+      if (!cat) applyBanner(staticMeta || { en: slug, hi: "", desc: "", hero: "" });
+
+      document.getElementById("result-count").innerHTML = `<strong>${products.length}</strong> products`;
+      if (!products.length) {
+        document.getElementById("grid").innerHTML = `<p class="muted" style="padding:24px 0">No products in this category yet.</p>`;
         return;
       }
-      products = BB_APP.find.byCategory(cat.slug);
-
-      document.title = `${cat.en} (${cat.hi}) — Bangali Sweets, Bhind`;
-      document.getElementById("page-desc").setAttribute("content", `${cat.desc} Order online from Bangali Sweets, Bhind.`);
-      document.getElementById("banner-img").src = cat.hero;
-      document.getElementById("banner-img").alt = cat.en;
-      document.getElementById("crumb-name").textContent = cat.en;
-      document.getElementById("cat-hi").textContent = cat.hi;
-      document.getElementById("cat-en").textContent = cat.en;
-      document.getElementById("cat-desc").textContent = cat.desc;
-      document.getElementById("result-count").innerHTML = `<strong>${products.length}</strong> products`;
       render(lastSort);
     }
 
@@ -254,7 +243,6 @@
       `).join("");
     }
     init();
-    window.addEventListener("bb:catalogue-loaded", init);
   </script>
 </body>
 </html>

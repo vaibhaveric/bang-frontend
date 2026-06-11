@@ -60,8 +60,10 @@
 
     const liveViews = AD.liveProductViews();
 
+    const reorderable = filter !== "low";
     document.getElementById("catalog-tbody").innerHTML = `<div class="scroll-x"><table class="table">
       <thead><tr>
+        <th style="width:28px;" title="${reorderable ? 'Drag rows to set the order shown on the website' : 'Switch off the Low stock filter to reorder'}"></th>
         <th style="width:36px;"><input type="checkbox"/></th>
         <th>Product</th>
         <th>Category</th>
@@ -78,7 +80,8 @@
           const lowStock = (p.stock || 0) < 15;
           const oos = (p.stock || 0) === 0;
           const views = liveViews[p.id] || Math.floor(Math.random() * 2000) + 400;
-          return `<tr>
+          return `<tr data-id="${p.id}" ${reorderable ? 'draggable="true" class="cat-row"' : ''}>
+            <td class="drag-handle" style="text-align:center; color:var(--ink-3); ${reorderable ? 'cursor:grab' : 'opacity:.3'}" title="Drag to reorder">⠿</td>
             <td><input type="checkbox"/></td>
             <td>
               <div style="display: flex; gap: 12px; align-items: center;">
@@ -115,6 +118,67 @@
         }).join("")}
       </tbody>
     </table></div>`;
+
+    if (reorderable) attachDragHandlers();
+  }
+
+  // ---------- drag-to-reorder ----------
+  // Rows are draggable; dropping persists displayOrder so the website lists products
+  // in this exact order (the public catalogue + category API sort by displayOrder).
+  function attachDragHandlers() {
+    const tbody = document.querySelector("#catalog-tbody tbody");
+    if (!tbody) return;
+
+    tbody.querySelectorAll("tr.cat-row").forEach(row => {
+      row.addEventListener("dragstart", e => {
+        row.classList.add("dragging");
+        row.style.opacity = ".4";
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", row.dataset.id);   // Firefox needs payload
+      });
+      row.addEventListener("dragend", () => {
+        row.classList.remove("dragging");
+        row.style.opacity = "";
+      });
+      row.addEventListener("dragover", e => {
+        e.preventDefault();
+        const dragging = tbody.querySelector("tr.dragging");
+        if (!dragging || dragging === row) return;
+        const rect = row.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        tbody.insertBefore(dragging, after ? row.nextSibling : row);
+      });
+    });
+
+    tbody.addEventListener("drop", e => { e.preventDefault(); persistOrderFromDOM(); });
+  }
+
+  async function persistOrderFromDOM() {
+    const tbody = document.querySelector("#catalog-tbody tbody");
+    if (!tbody) return;
+    const visibleIds = Array.from(tbody.querySelectorAll("tr[data-id]")).map(r => r.dataset.id);
+
+    // Rebuild the master list: keep rows outside the current filter where they are,
+    // and slot the visible rows back in their new on-screen order.
+    const byId = new Map(products.map(p => [p.id, p]));
+    const visibleSet = new Set(visibleIds);
+    let qi = 0;
+    products = products.map(p => visibleSet.has(p.id) ? byId.get(visibleIds[qi++]) : p);
+
+    if (!window.ADMIN_API) {                 // static/offline mode — persist locally only
+      AD.saveProducts(products);
+      BB_APP.toast("Order saved");
+      return;
+    }
+    try {
+      const ids = products.map(p => p._backendId).filter(Boolean);
+      await ADMIN_API.reorderProducts(ids);
+      products = AD.products();              // re-sync from backend (now in displayOrder)
+      BB_APP.toast("Order saved · live on the website");
+    } catch (e) {
+      BB_APP.toast("Couldn't save order: " + e.message);
+      renderTab("catalog");                  // revert the DOM to the server's order
+    }
   }
 
   AdminPages.catalog._restock = async function(id) {
@@ -157,10 +221,12 @@
   AdminPages.catalog._close = closeFullscreen;
 
   AdminPages.catalog._openDrawer = function(id) {
-    const p = id ? products.find(x => x.id === id) : { en: "", hi: "", cat: "sweets", unit: "500g", price: 0, mrp: 0, stock: 0, img: "", images: [] };
+    const p = id ? products.find(x => x.id === id) : { en: "", hi: "", cat: "sweets", unit: "500g", price: 0, mrp: 0, stock: 0, img: "", images: [], weights: [] };
     const isNew = !id;
-    const WEIGHT_CATS = ["sweets", "namkeen", "dairy"];   // priced per kg, sold in 250g/500g/750g/1kg boxes
+    const WEIGHT_CATS = ["sweets", "namkeen", "dairy", "bakery"];   // priced per kg
+    const CUSTOM_WEIGHT_CATS = ["bakery"];                          // admin defines the weight list (kg/lb)
     const isWeight = WEIGHT_CATS.includes(p.cat);
+    const isCustomWeight = CUSTOM_WEIGHT_CATS.includes(p.cat);
     // working copy of the product's image list (first = primary)
     AdminPages.catalog._imgs = (p.images && p.images.length) ? p.images.slice() : (p.img ? [p.img] : []);
     openFullscreen(`
@@ -183,8 +249,13 @@
         <div id="d-unit-wrap" style="${isWeight ? 'display:none' : ''}"><label class="label">Unit / Pieces</label><input class="input" id="d-unit" value="${p.unit || p.pieces || ''}"/></div>
       </div>
       <div class="field-row cols-2 field">
-        <div><label class="label" id="d-price-label">${isWeight ? 'Price (₹ per kg)' : 'Price (₹)'}</label><input class="input" id="d-price" type="number" value="${p.price}"/></div>
+        <div><label class="label" id="d-price-label">${isWeight ? 'Price (₹ per kg)' : 'Price (₹ per item)'}</label><input class="input" id="d-price" type="number" value="${p.price}"/></div>
         <div><label class="label">MRP (₹)</label><input class="input" id="d-mrp" type="number" value="${p.mrp}"/></div>
+      </div>
+      <div class="field" id="d-weights-wrap" style="${isCustomWeight ? '' : 'display:none'}">
+        <label class="label">Available weights — comma separated, in kg or lb (e.g. <code>0.5kg, 1kg, 1.5kg</code> or <code>1lb, 2lb</code>)</label>
+        <input class="input" id="d-weights" value="${(p.weights || []).map(w => w + 'kg').join(', ')}" placeholder="0.5kg, 1kg, 1.5kg, 2kg"/>
+        <div style="font-size:12px; color:var(--ink-3); margin-top:6px;">Customers pick a weight; box price = per-kg price × weight. Both kg and lb are shown on the website.</div>
       </div>
       <div class="field-row cols-2 field">
         <div><label class="label" id="d-stock-label">${isWeight ? 'Stock (kg)' : 'Stock'}</label><input class="input" id="d-stock" type="number" value="${p.stock || 0}"/></div>
@@ -222,12 +293,25 @@
     if (!grid) return;
     const imgs = AdminPages.catalog._imgs || [];
     grid.innerHTML = imgs.length ? imgs.map((url, i) => `
-      <div style="position:relative; width:96px; height:96px; border-radius:var(--radius); overflow:hidden; border:1px solid ${i===0?'var(--accent)':'var(--rule)'};">
-        <img src="${url}" style="width:100%; height:100%; object-fit:cover;"/>
-        ${i===0 ? `<span style="position:absolute; left:4px; bottom:4px; background:var(--accent); color:#fff; font-size:9px; padding:1px 5px; border-radius:99px;">Primary</span>` : ''}
-        <button onclick="AdminPages.catalog._removeImage(${i})" title="Remove" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,.6); color:#fff; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer; line-height:1;">×</button>
+      <div style="width:112px; border:1px solid ${i===0?'var(--accent)':'var(--rule)'}; border-radius:var(--radius); overflow:hidden;">
+        <div style="position:relative; width:112px; height:96px;">
+          <img src="${url}" style="width:100%; height:100%; object-fit:cover;"/>
+          ${i===0 ? `<span style="position:absolute; left:4px; top:4px; background:var(--accent); color:#fff; font-size:9px; padding:1px 6px; border-radius:99px;">★ Main</span>` : ''}
+          <button onclick="AdminPages.catalog._removeImage(${i})" title="Remove" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,.6); color:#fff; border:none; border-radius:50%; width:20px; height:20px; cursor:pointer; line-height:1;">×</button>
+        </div>
+        ${i!==0
+          ? `<button onclick="AdminPages.catalog._setMain(${i})" style="width:100%; border:none; border-top:1px solid var(--rule); background:var(--paper); font-size:11px; padding:5px 0; cursor:pointer; color:var(--accent);">Set as main</button>`
+          : `<div style="font-size:11px; text-align:center; padding:5px 0; color:var(--ink-3);">Main image</div>`}
       </div>
     `).join("") : `<span style="font-size:13px; color:var(--ink-3);">No images yet — upload above.</span>`;
+  };
+
+  AdminPages.catalog._setMain = function(i) {
+    const imgs = AdminPages.catalog._imgs || [];
+    if (i <= 0 || i >= imgs.length) return;
+    const [picked] = imgs.splice(i, 1);
+    imgs.unshift(picked);                 // move chosen image to position 0 (primary)
+    AdminPages.catalog._renderImages();
   };
 
   AdminPages.catalog._uploadImages = async function(input) {
@@ -250,21 +334,41 @@
     AdminPages.catalog._renderImages();
   };
 
-  // Toggle the form between unit-priced and per-kg (weight) categories live as the dropdown changes.
+  // Toggle the form between per-item and per-kg (weight) categories live as the dropdown changes.
   AdminPages.catalog._onCatChange = function() {
-    const isW = ["sweets", "namkeen", "dairy"].includes(document.getElementById("d-cat").value);
+    const cat = document.getElementById("d-cat").value;
+    const isW = ["sweets", "namkeen", "dairy", "bakery"].includes(cat);
+    const isCustomW = ["bakery"].includes(cat);
     const unitWrap = document.getElementById("d-unit-wrap");
     if (unitWrap) unitWrap.style.display = isW ? "none" : "";
+    const wWrap = document.getElementById("d-weights-wrap");
+    if (wWrap) wWrap.style.display = isCustomW ? "" : "none";
     const pl = document.getElementById("d-price-label");
-    if (pl) pl.textContent = isW ? "Price (₹ per kg)" : "Price (₹)";
+    if (pl) pl.textContent = isW ? "Price (₹ per kg)" : "Price (₹ per item)";
     const sl = document.getElementById("d-stock-label");
     if (sl) sl.textContent = isW ? "Stock (kg)" : "Stock";
+  };
+
+  // Parse the "available weights" field — accepts kg, lb/pound, or g tokens; returns kg numbers.
+  AdminPages.catalog._parseWeights = function(str) {
+    return (str || "").split(",").map(tok => {
+      tok = tok.trim().toLowerCase();
+      const num = parseFloat(tok.replace(/[^0-9.]/g, ""));
+      if (!(num > 0)) return null;
+      let kg;
+      if (tok.includes("kg")) kg = num;
+      else if (/lb|pound/.test(tok)) kg = num * 0.453592;
+      else if (/(^|[^k])g\b|gram|gm/.test(tok)) kg = num / 1000;
+      else kg = num;                                  // bare number → kg
+      return Math.round(kg * 1000) / 1000;
+    }).filter(n => n && n > 0);
   };
 
   AdminPages.catalog._save = async function(id) {
     const get = k => document.getElementById("d-"+k)?.value || "";
     const catSlug = get("cat");
-    const isWeightCat = ["sweets", "namkeen", "dairy"].includes(catSlug);
+    const isWeightCat = ["sweets", "namkeen", "dairy", "bakery"].includes(catSlug);
+    const isCustomWeightCat = ["bakery"].includes(catSlug);
     // Resolve categoryId from cached categories
     const catEntry = (ADMIN_API?.getCache()?.categories || []).find(c => c.slug === catSlug);
     const existing = id ? products.find(p => p.id === id) : null;
@@ -273,6 +377,7 @@
       id: id || ("p" + Date.now()),
       en: get("en"), hi: get("hi"), cat: catSlug,
       unit: isWeightCat ? "per kg" : get("unit"),
+      weights: isCustomWeightCat ? AdminPages.catalog._parseWeights(get("weights")) : [],
       price: Number(get("price")) || 0,
       mrp: Number(get("mrp")) || 0,
       stock: Number(get("stock")) || 0,

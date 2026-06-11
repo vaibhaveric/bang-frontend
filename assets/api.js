@@ -47,6 +47,8 @@
       images: p.images ? p.images.split(",").filter(Boolean) : (p.imageUrl ? [p.imageUrl] : []),
       unit:   p.unit || "",
       pieces: p.unit || "",
+      // Available weights (kg) for weight-priced bakery items; [] for others.
+      weights: p.weightOptions ? p.weightOptions.split(",").map(s => parseFloat(s)).filter(n => n > 0) : [],
       stock:  p.stock,
       tag:    p.tag || null,
       sold:   p.soldCount || 0,
@@ -88,7 +90,32 @@
     };
   }
 
-  // ── Catalogue ─────────────────────────────────────────────────────────────
+  // ── Catalogue (with stale-while-revalidate cache) ──────────────────────────
+  // The DB is remote, so we cache the mapped catalogue in sessionStorage and render
+  // it instantly on every page, then refresh in the background. Navigation between
+  // pages no longer waits on the network.
+  const CATALOGUE_CACHE_KEY = "bb_catalogue_v2";
+
+  function readCatalogueCache() {
+    try {
+      const raw = sessionStorage.getItem(CATALOGUE_CACHE_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || !obj.t || !obj.data) return null;
+      return obj;   // { t, data: { cats, prods, reviews } }
+    } catch { return null; }
+  }
+  function writeCatalogueCache(data) {
+    try { sessionStorage.setItem(CATALOGUE_CACHE_KEY, JSON.stringify({ t: Date.now(), data })); } catch { /* quota */ }
+  }
+  function applyCatalogue(d) {
+    window.BB = window.BB || {};
+    window.BB.categories = d.cats;
+    window.BB.products   = d.prods;
+    if (d.reviews && d.reviews.length) window.BB.reviews = d.reviews;
+    window.dispatchEvent(new CustomEvent("bb:catalogue-loaded", { detail: { cats: d.cats, prods: d.prods } }));
+  }
+
   async function loadCatalogue() {
     try {
       const [cats, prods, reviews] = await Promise.all([
@@ -105,12 +132,13 @@
       });
       mappedCats.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
 
-      window.BB = window.BB || {};
-      window.BB.categories = mappedCats;
-      window.BB.products   = mappedProds;
-      if (reviews && reviews.length > 0) window.BB.reviews = reviews.map(mapReview);
-
-      window.dispatchEvent(new CustomEvent("bb:catalogue-loaded", { detail: { cats: mappedCats, prods: mappedProds } }));
+      const data = {
+        cats:    mappedCats,
+        prods:   mappedProds,
+        reviews: (reviews && reviews.length > 0) ? reviews.map(mapReview) : [],
+      };
+      writeCatalogueCache(data);
+      applyCatalogue(data);
       return { cats: mappedCats, prods: mappedProds };
     } catch (e) {
       console.warn("[API] Backend unreachable, keeping existing catalogue:", e.message);
@@ -118,9 +146,40 @@
     }
   }
 
+  // Opaque full-screen boot loader — shown on first load (no cached data) so the
+  // dummy fallback from catalog.js is never visible while the API is loading.
+  function showBootLoader() {
+    if (document.getElementById("bb-boot-loader")) return;
+    const el = document.createElement("div");
+    el.id = "bb-boot-loader";
+    el.className = "bb-loader bb-loader--solid is-on";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.innerHTML = `<div class="bb-loader__card"><div class="bb-loader__ring"></div><div class="bb-loader__msg">Loading…</div></div>`;
+    (document.body || document.documentElement).appendChild(el);
+  }
+  function hideBootLoader() {
+    const el = document.getElementById("bb-boot-loader");
+    if (!el) return;
+    el.classList.remove("is-on");
+    setTimeout(() => el.remove(), 320);   // remove after the fade-out
+  }
+
+
   async function getProductById(id) {
     try { return mapProduct(await req("GET", "/products/" + id)); }
     catch { return window.BB?.products?.find(p => p.id === String(id)) || null; }
+  }
+
+  // Single-call category fetch: returns the category's products plus the category
+  // meta (banner image, names, description) read from the embedded category object,
+  // so a category page needs no /categories or full /products call.
+  async function getProductsByCategory(slug) {
+    const res = await req("GET", "/products?category=" + encodeURIComponent(slug));
+    const products = res.map(mapProduct);
+    const rawCat = res.find(p => p.category && p.category.slug === slug)?.category
+                || (res[0] && res[0].category) || null;
+    return { category: rawCat ? mapCategory(rawCat) : null, products };
   }
 
   async function searchProducts(q) {
@@ -282,7 +341,7 @@
   // ── Public API ────────────────────────────────────────────────────────────
   window.BB_API = {
     BASE,
-    loadCatalogue, getProductById, searchProducts, getBanners,
+    loadCatalogue, getProductById, getProductsByCategory, searchProducts, getBanners,
     sendOtp, verifyOtp, logout,
     placeOrder, getMyOrders, trackOrder,
     validateCoupon, getShipping,
@@ -290,8 +349,25 @@
     admin,
     isLoggedIn: () => !!getToken(),
     getToken,
+    // Force a fresh catalogue fetch (e.g. after an admin edit) bypassing the cache.
+    invalidateCatalogue: () => { try { sessionStorage.removeItem(CATALOGUE_CACHE_KEY); } catch {} return loadCatalogue(); },
   };
 
-  // Auto-load catalogue on page load
-  document.addEventListener("DOMContentLoaded", () => loadCatalogue());
+  // Decide synchronously NOW — api.js runs before each page's inline render script:
+  //  • cache present → apply real (cached) data immediately, so the page renders live
+  //    data with no dummy flash and no loader.
+  //  • no cache → show the opaque boot loader to fully hide the dummy catalog.js
+  //    fallback until the API responds.
+  const _bootCache = readCatalogueCache();
+  if (_bootCache) applyCatalogue(_bootCache.data);
+  else showBootLoader();
+
+  // Always revalidate against the API after the page loads; drop the boot loader when done.
+  // A page can set window.BB_SKIP_CATALOGUE = true (before DOMContentLoaded) to opt out
+  // of the catalogue-wide fetch (/categories + /products + /reviews) — used by pages that
+  // load only their own slice of data, e.g. the category page.
+  document.addEventListener("DOMContentLoaded", () => {
+    if (window.BB_SKIP_CATALOGUE) { hideBootLoader(); return; }
+    loadCatalogue().finally(hideBootLoader);
+  });
 })();

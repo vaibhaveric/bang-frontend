@@ -558,6 +558,13 @@ table.table tr:hover td { background: color-mix(in srgb, var(--bg) 50%, var(--pa
   transition: opacity .28s ease, visibility .28s ease;
 }
 .bb-loader.is-on { opacity: 1; visibility: visible; }
+/* Opaque variant — fully hides the page (and any dummy fallback data) during the
+   initial catalogue load, until live API data arrives. */
+.bb-loader--solid {
+  background: var(--bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
 .bb-loader__card {
   display: flex;
   flex-direction: column;

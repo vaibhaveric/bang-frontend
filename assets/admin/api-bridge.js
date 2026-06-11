@@ -55,6 +55,7 @@
       images:  p.images ? p.images.split(",").filter(Boolean) : (p.imageUrl ? [p.imageUrl] : []),
       unit:    p.unit || "",
       pieces:  p.unit || "",
+      weights: p.weightOptions ? p.weightOptions.split(",").map(s => parseFloat(s)).filter(n => n > 0) : [],
       stock:   p.stock,
       tag:     p.tag || null,
       sold:    p.soldCount || 0,
@@ -68,6 +69,7 @@
       seoTitle: p.seoTitle || "",
       seoDesc:  p.seoDescription || "",
       active:  p.active !== false,
+      displayOrder: p.displayOrder || 0,
       _backendId: p.id,
       _categoryId: p.category ? p.category.id : null,
     };
@@ -205,6 +207,7 @@
         price:         productData.price,
         mrp:           productData.mrp,
         unit:          productData.unit || productData.pieces,
+        weightOptions: (productData.weights || []).join(","),
         stock:         productData.stock,
         imageUrl:      productData.img,
         images:        productData.images || [],
@@ -240,6 +243,13 @@
       await refresh();
     },
 
+    // Persist a drag-to-reorder. orderedIds is the full product list in its new order;
+    // backend assigns displayOrder = position, which the public catalogue sorts by.
+    reorderProducts: async function (orderedIds) {
+      await apiFetch("PATCH", "/admin/products/reorder", { ids: orderedIds });
+      await refresh();
+    },
+
     uploadImage: async function (file) {
       const fd = new FormData();
       fd.append("file", file);
@@ -250,7 +260,7 @@
       });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
-      return BASE.replace("/api", "") + data.url;
+      return data.url;   // relative path (e.g. /assets/uploads/xyz.png) served by the frontend
     },
 
     // Categories

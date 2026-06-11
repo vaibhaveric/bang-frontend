@@ -198,10 +198,24 @@
     let p = null;
     let cat = null;
     let qty = 1;
-    const WEIGHT_CATS = ["sweets", "namkeen", "dairy"];   // priced per kg, sold in boxes
-    const WEIGHTS = [["250g", 0.25], ["500g", 0.5], ["750g", 0.75], ["1kg", 1]];
+    const WEIGHT_CATS = ["sweets", "namkeen", "dairy", "bakery"];   // priced per kg, sold in boxes
+    const WEIGHTS = [["250g", 0.25], ["500g", 0.5], ["750g", 0.75], ["1kg", 1]];   // default fixed weights
+    const LB_PER_KG = 2.20462;
     let selW = 0.5, selLabel = "500g";                    // (legacy, unused by per-weight steppers)
     window.selectWeight = function(w, label) { selW = w; selLabel = label; render(); };
+
+    // Bakery shows admin-defined weights with both kg and lb; other weight cats use the fixed list.
+    function fmtWeightLabel(kg) {
+      const lb = kg * LB_PER_KG;
+      const kgStr = kg < 1 ? Math.round(kg * 1000) + " g" : kg + " kg";
+      return `${kgStr} · ${lb.toFixed(lb < 1 ? 2 : 1)} lb`;
+    }
+    function activeWeights() {
+      if (p && p.cat === "bakery" && p.weights && p.weights.length) {
+        return p.weights.map(kg => [fmtWeightLabel(kg), kg]);
+      }
+      return WEIGHTS;
+    }
 
     // ---- per-weight cart helpers (weight categories) ----
     function cartQtyFor(w) {
@@ -216,7 +230,7 @@
       render();   // refresh the on-page quantities + bag summary
     };
     function bagSummaryHtml() {
-      const sel = WEIGHTS.map(([label, w]) => ({ label, w, q: cartQtyFor(w) })).filter(x => x.q > 0);
+      const sel = activeWeights().map(([label, w]) => ({ label, w, q: cartQtyFor(w) })).filter(x => x.q > 0);
       if (!sel.length) return '<span style="font-size:13px;color:var(--ink-3)">No boxes added yet — tap + above.</span>';
       const total = sel.reduce((s, x) => s + p.price * x.w * x.q, 0);
       return `In your bag: ${sel.map(x => `<strong>${x.label} × ${x.q}</strong>`).join(" · ")} — ${BB_APP.rupee(Math.round(total))}`;
@@ -279,7 +293,7 @@
           </div>
 
           <div style="display:flex; flex-direction:column; gap:10px; margin: 8px 0 12px;">
-            ${WEIGHTS.map(([label, w]) => {
+            ${activeWeights().map(([label, w]) => {
               const q = cartQtyFor(w);
               return `
               <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 14px; border:1px solid ${q>0?'var(--accent)':'var(--rule)'}; border-radius:var(--radius);">

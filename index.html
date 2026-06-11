@@ -245,17 +245,129 @@
       .story-section { padding: 48px 16px; }
       .collage { height: 360px; }
     }
+
+    /* ============ BANNER SLIDER ============ */
+    .banner-slider {
+      position: relative;
+      max-width: 1320px;
+      margin: 18px auto 4px;
+      padding: 0 32px;
+    }
+    .bs-viewport {
+      position: relative;
+      overflow: hidden;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      background: var(--paper, #faf7f2);
+      /* Banners are 4128×1024 (~4:1); reserve the space so there is no layout shift. */
+      aspect-ratio: 4128 / 1024;
+    }
+    .bs-track {
+      display: flex;
+      height: 100%;
+      transition: transform .7s cubic-bezier(.22,.61,.36,1);
+      will-change: transform;
+    }
+    .bs-slide {
+      flex: 0 0 100%;
+      height: 100%;
+      display: block;
+    }
+    .bs-slide img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;   /* ratio matches the container, so nothing is cropped */
+      display: block;
+    }
+    .bs-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,.82);
+      color: #2a1a12;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,.18);
+      opacity: 0;
+      transition: opacity .25s, background .2s;
+      z-index: 2;
+    }
+    .banner-slider:hover .bs-arrow { opacity: 1; }
+    .bs-arrow:hover { background: #fff; }
+    .bs-prev { left: 44px; }
+    .bs-next { right: 44px; }
+    .bs-dots {
+      position: absolute;
+      left: 0; right: 0; bottom: 14px;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      z-index: 2;
+    }
+    .bs-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      border: none;
+      padding: 0;
+      background: rgba(255,255,255,.55);
+      cursor: pointer;
+      transition: background .25s, width .25s;
+    }
+    .bs-dot.active {
+      width: 24px;
+      border-radius: 5px;
+      background: #fff;
+    }
+    @media (max-width: 980px) {
+      .banner-slider { padding: 0 24px; }
+      .bs-prev { left: 32px; }
+      .bs-next { right: 32px; }
+    }
+    @media (max-width: 540px) {
+      /* Full-bleed strip on phones; arrows hidden (swipe instead). */
+      .banner-slider { padding: 0; margin: 0 0 4px; }
+      .bs-viewport { border-radius: 0; box-shadow: none; }
+      .bs-arrow { display: none; }
+      .bs-dots { bottom: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .bs-track { transition: none; }
+    }
   </style>
 </head>
 <body>
   <header id="site-header" role="banner"></header>
 
   <main>
+    <!-- BANNER SLIDER -->
+    <section class="banner-slider" aria-label="Featured offers" aria-roledescription="carousel">
+      <div class="bs-viewport">
+        <div class="bs-track" id="bs-track">
+          <a class="bs-slide" href="category.html?slug=hampers"><img src="assets/Images/web/a.jpg" alt="Royal Sweets & Bakehouse — Premium Gift Hampers" fetchpriority="high" decoding="async"/></a>
+          <a class="bs-slide" href="category.html?slug=sweets"><img src="assets/Images/web/b.jpg" alt="Featured offer" loading="lazy" decoding="async"/></a>
+          <a class="bs-slide" href="category.html?slug=dryfruits"><img src="assets/Images/web/c.jpg" alt="Featured offer" loading="lazy" decoding="async"/></a>
+          <a class="bs-slide" href="category.html?slug=bakery"><img src="assets/Images/web/d.jpg" alt="Featured offer" loading="lazy" decoding="async"/></a>
+          <a class="bs-slide" href="category.html?slug=hampers"><img src="assets/Images/web/e.jpg" alt="Featured offer" loading="lazy" decoding="async"/></a>
+        </div>
+      </div>
+      <button class="bs-arrow bs-prev" type="button" aria-label="Previous banner">&#8249;</button>
+      <button class="bs-arrow bs-next" type="button" aria-label="Next banner">&#8250;</button>
+      <div class="bs-dots" id="bs-dots" role="tablist" aria-label="Choose banner"></div>
+    </section>
+
     <!-- HERO -->
     <section class="hero warm-grad" aria-labelledby="hero-title">
       <div class="grid">
         <div>
-          <div class="eyebrow" style="color: var(--gold)">Festive Edit · Diwali 2026</div>
+<!--          <div class="eyebrow" style="color: var(&#45;&#45;gold)">Festive Edit · Diwali 2026</div>-->
           <h1 class="disp" id="hero-title">
             Gifts that<br/>
             <span class="alt">arrive with</span><br/>
@@ -402,6 +514,66 @@
   <script src="assets/env.js"></script>  <script src="assets/api.js"></script>
   <script>
     BB_APP.mount({ nav: null });
+
+    // ============ BANNER SLIDER ============
+    (function initBannerSlider() {
+      const track = document.getElementById("bs-track");
+      const dotsWrap = document.getElementById("bs-dots");
+      if (!track) return;
+      const slides = Array.from(track.children);
+      const n = slides.length;
+      if (n <= 1) { if (dotsWrap) dotsWrap.style.display = "none"; return; }
+
+      let i = 0;
+      let timer = null;
+      const DELAY = 4000;
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      // Dots
+      const dots = slides.map((_, idx) => {
+        const b = document.createElement("button");
+        b.className = "bs-dot" + (idx === 0 ? " active" : "");
+        b.type = "button";
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-label", "Banner " + (idx + 1));
+        b.addEventListener("click", () => { go(idx); restart(); });
+        dotsWrap.appendChild(b);
+        return b;
+      });
+
+      function go(next) {
+        i = (next + n) % n;
+        track.style.transform = `translateX(-${i * 100}%)`;
+        dots.forEach((d, idx) => d.classList.toggle("active", idx === i));
+      }
+      const next = () => go(i + 1);
+      const prev = () => go(i - 1);
+
+      function start() { if (!reduceMotion) timer = setInterval(next, DELAY); }
+      function stop()  { clearInterval(timer); timer = null; }
+      function restart() { stop(); start(); }
+
+      document.querySelector(".bs-next").addEventListener("click", () => { next(); restart(); });
+      document.querySelector(".bs-prev").addEventListener("click", () => { prev(); restart(); });
+
+      // Pause on hover (desktop) and when the tab is hidden.
+      const slider = document.querySelector(".banner-slider");
+      slider.addEventListener("mouseenter", stop);
+      slider.addEventListener("mouseleave", start);
+      document.addEventListener("visibilitychange", () => document.hidden ? stop() : start());
+
+      // Touch swipe (mobile).
+      let x0 = null;
+      track.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; stop(); }, { passive: true });
+      track.addEventListener("touchend", e => {
+        if (x0 === null) return;
+        const dx = e.changedTouches[0].clientX - x0;
+        if (Math.abs(dx) > 40) (dx < 0 ? next() : prev());
+        x0 = null; start();
+      });
+
+      start();
+    })();
 
     function renderHome() {
       // Categories

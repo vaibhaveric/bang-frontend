@@ -157,14 +157,14 @@ window.BB = {
     { id: "dy3", cat: "dairy", en: "Mishti Doi",            hi: "मिष्टी दोई",    unit: "500g", price: 149, mrp: 179, img: IMG.dairy,     stock: 18, sold: 54,  rating: 4.7, reviews: 38,
       desc: "Bengali-style sweet yogurt set in earthen pots.", ingredients: "Milk, jaggery", shelf: "4 days · refrigerate" },
 
-    // Bakery
-    { id: "b1", cat: "bakery", en: "Eggless Chocolate Cake", hi: "एगलेस चॉकलेट केक", unit: "500g", price: 549, mrp: 599, img: IMG.bakery, stock: 6, sold: 38, rating: 4.7, reviews: 44,
+    // Bakery — priced per kg, sold in admin-defined weights (shown in kg & lb on the product page)
+    { id: "b1", cat: "bakery", en: "Eggless Chocolate Cake", hi: "एगलेस चॉकलेट केक", unit: "per kg", price: 1099, mrp: 1198, weights: [0.5, 1, 1.5, 2], img: IMG.bakery, stock: 6, sold: 38, rating: 4.7, reviews: 44,
       desc: "Rich eggless chocolate cake with ganache topping. Order 12hrs ahead.", ingredients: "Flour, cocoa, sugar, butter", shelf: "Order fresh · 3 days" },
-    { id: "b2", cat: "bakery", en: "Butter Cookies",        hi: "बटर कुकीज़",     unit: "300g", price: 249, mrp: 279, img: IMG.brass,    stock: 28, sold: 76, rating: 4.6, reviews: 52,
+    { id: "b2", cat: "bakery", en: "Butter Cookies",        hi: "बटर कुकीज़",     unit: "per kg", price: 829, mrp: 930, weights: [0.25, 0.5, 1], img: IMG.brass,    stock: 28, sold: 76, rating: 4.6, reviews: 52,
       desc: "Classic Indian-style butter cookies.", ingredients: "Flour, butter, sugar", shelf: "20 days" },
-    { id: "b3", cat: "bakery", en: "Atta Biscuits",         hi: "आटा बिस्किट",   unit: "400g", price: 199, mrp: 219, img: IMG.bakery,   stock: 42, sold: 62, rating: 4.5, reviews: 38,
+    { id: "b3", cat: "bakery", en: "Atta Biscuits",         hi: "आटा बिस्किट",   unit: "per kg", price: 499, mrp: 548, weights: [0.5, 1], img: IMG.bakery,   stock: 42, sold: 62, rating: 4.5, reviews: 38,
       desc: "Whole-wheat biscuits, lightly sweet.", ingredients: "Whole wheat, ghee, sugar", shelf: "30 days" },
-    { id: "b4", cat: "bakery", en: "Coconut Macaroons",     hi: "नारियल मेकरून",  unit: "250g", price: 299, mrp: 329, img: IMG.dryfruits, stock: 22, sold: 28, rating: 4.7, reviews: 21,
+    { id: "b4", cat: "bakery", en: "Coconut Macaroons",     hi: "नारियल मेकरून",  unit: "per kg", price: 1199, mrp: 1299, weights: [0.25, 0.5], img: IMG.dryfruits, stock: 22, sold: 28, rating: 4.7, reviews: 21,
       desc: "Chewy coconut macaroons with a crisp shell.", ingredients: "Coconut, sugar, eggless", shelf: "10 days" },
 
     // Birthday

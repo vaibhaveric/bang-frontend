@@ -227,7 +227,6 @@
                   ${order.email ? `<div style="font-size: 12px; color: var(--ink-3);">${order.email}</div>` : ''}
                 </div>
               </div>
-              <button class="btn btn-ghost btn-sm" style="width: 100%;" onclick="AdminPages.customers._open('+91 ${order.phone}'); closeModal();">View customer profile →</button>
             </div>
 
             <!-- Delivery -->

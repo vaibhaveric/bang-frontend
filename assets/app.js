@@ -232,17 +232,25 @@
   };
 
   // ============================== HEADER ==============================
+  // Static fallback shown only until the API categories load (cold page, no cache).
+  const FALLBACK_NAV = [
+    { slug: "sweets",    label: "Sweets" },
+    { slug: "namkeen",   label: "Namkeen" },
+    { slug: "dryfruits", label: "Dry Fruits" },
+    { slug: "dairy",     label: "Dairy" },
+    { slug: "bakery",    label: "Bakery" },
+    { slug: "hampers",   label: "Hampers" },
+    { slug: "birthday",  label: "Birthday" },
+  ];
+
   function renderHeader(activeNav) {
     const auth = readAuth();
-    const navItems = [
-      { slug: "sweets",    label: "Sweets" },
-      { slug: "namkeen",   label: "Namkeen" },
-      { slug: "dryfruits", label: "Dry Fruits" },
-      { slug: "dairy",     label: "Dairy" },
-      { slug: "bakery",    label: "Bakery" },
-      { slug: "hampers",   label: "Hampers" },
-      { slug: "birthday",  label: "Birthday" },
-    ];
+    // Categories come from /api/categories (active only, ordered by displayOrder),
+    // loaded into STORE.categories by api.js. Fall back to the static list pre-load.
+    const cats = (STORE.categories || []).filter(c => c.active !== false);
+    const navItems = cats.length
+      ? cats.map(c => ({ slug: c.slug, label: c.en }))
+      : FALLBACK_NAV;
     return `
       <div class="bar-promo">
         <span>🎁 Free delivery on orders above ₹999 in Bhind · Same-day before 4 PM</span>
@@ -386,14 +394,13 @@
   window.addEventListener("bb:cart", refreshCartCount);
 
   // ============================== INIT ==============================
-  function mount(opts = {}) {
-    const path = location.pathname.split("/").pop() || "index.html";
-    trackPageView(path);
+  let currentNav = null;
 
+  function paintChrome() {
     const header = document.getElementById("site-header");
     if (header) {
       header.className = "site-header";
-      header.innerHTML = renderHeader(opts.nav);
+      header.innerHTML = renderHeader(currentNav);
     }
     const footer = document.getElementById("site-footer");
     if (footer) {
@@ -401,6 +408,17 @@
       footer.innerHTML = renderFooter();
     }
   }
+
+  function mount(opts = {}) {
+    const path = location.pathname.split("/").pop() || "index.html";
+    trackPageView(path);
+    currentNav = opts.nav || null;
+    paintChrome();
+  }
+
+  // When the live categories arrive from the API, repaint the nav/footer so they
+  // replace the static fallback without a page reload.
+  window.addEventListener("bb:catalogue-loaded", paintChrome);
 
   // ============================== SEARCH ==============================
   function search(q) {
