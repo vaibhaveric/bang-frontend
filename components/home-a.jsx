@@ -70,7 +70,7 @@ function HomeA() {
         <div style={{display:"flex", alignItems:"end", justifyContent:"space-between", marginBottom:28}}>
           <div>
             <div className="eyebrow">Categories</div>
-            <h2 className="disp" style={{fontSize:42, margin:"6px 0 0"}}>Browse the kitchen</h2>
+            <h2 className="disp" style={{fontSize:42, margin:"6px 0 0"}}>Browse the Legacy</h2>
           </div>
           <span style={{fontSize:13, color:"var(--accent)", fontWeight:600}}>View all 257 items →</span>
         </div>

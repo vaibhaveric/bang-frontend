@@ -252,14 +252,6 @@
       ? cats.map(c => ({ slug: c.slug, label: c.en }))
       : FALLBACK_NAV;
     return `
-      <div class="bar-promo">
-        <span>🎁 Free delivery on orders above ₹999 in Bhind · Same-day before 4 PM</span>
-        <span class="pr">
-          <a href="track.html">Track Order</a>
-          <a href="about.html#corporate">Bulk &amp; Corporate</a>
-          <a href="tel:${STORE.shop.phone}" style="color: var(--gold);">📞 ${STORE.shop.phoneDisplay}</a>
-        </span>
-      </div>
       <div class="bar-main">
         <a class="logo" href="index.html" aria-label="Bangali Sweets — Home">
           <span class="seal">B</span>

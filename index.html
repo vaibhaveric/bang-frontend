@@ -3,6 +3,17 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <!-- Pre-launch gate: the site is hidden behind a "Coming Soon" page. Only an admin
+       who opened it via "View site" in the dashboard (which sets bb_site_preview) gets
+       through; everyone else is redirected. Runs first so no content flashes. -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("bb_site_preview") === "1") return;  // admin preview — allow
+      } catch (e) {}
+      location.replace("/coming_soon");
+    })();
+  </script>
   <title>Bangali Sweets &amp; Dryfruits, Bhind — Hand-made Mithai, Namkeen &amp; Gift Hampers since 1987</title>
   <meta name="description" content="Order hand-made mithai, namkeen, dry fruits and gift hampers from Bhind's favourite sweet shop since 1987. Pure desi ghee, same-day Bhind delivery, pan-India shipping. Diwali, Rakhi and corporate hampers available."/>
   <meta name="keywords" content="bangali sweets, bhind sweet shop, mithai online bhind, gift hampers, diwali hampers, kaju katli online, dry fruits, namkeen, pustak bazar bhind"/>
@@ -148,7 +159,7 @@
 
     /* Trust strip */
     .trust-strip {
-      padding: 36px 32px;
+      padding: 15px 32px;
       background: var(--ink);
       color: #dac6a8;
     }
@@ -273,6 +284,11 @@
       height: 100%;
       display: block;
     }
+    .bs-slide picture {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
     .bs-slide img {
       width: 100%;
       height: 100%;
@@ -334,7 +350,8 @@
     @media (max-width: 540px) {
       /* Full-bleed strip on phones; arrows hidden (swipe instead). */
       .banner-slider { padding: 0; margin: 0 0 4px; }
-      .bs-viewport { border-radius: 0; box-shadow: none; }
+      /* Mobile banners (assets/Images/mob) are 2912×1440 (~2:1) — taller than desktop. */
+      .bs-viewport { border-radius: 0; box-shadow: none; aspect-ratio: 2912 / 1440; }
       .bs-arrow { display: none; }
       .bs-dots { bottom: 8px; }
     }
@@ -351,11 +368,11 @@
     <section class="banner-slider" aria-label="Featured offers" aria-roledescription="carousel">
       <div class="bs-viewport">
         <div class="bs-track" id="bs-track">
-          <a class="bs-slide" href="category.html?slug=hampers"><img src="assets/Images/web/a.jpg" alt="Royal Sweets & Bakehouse — Premium Gift Hampers" fetchpriority="high" decoding="async"/></a>
-          <a class="bs-slide" href="category.html?slug=sweets"><img src="assets/Images/web/b.jpg" alt="Featured offer" loading="lazy" decoding="async"/></a>
-          <a class="bs-slide" href="category.html?slug=dryfruits"><img src="assets/Images/web/c.jpg" alt="Featured offer" loading="lazy" decoding="async"/></a>
-          <a class="bs-slide" href="category.html?slug=bakery"><img src="assets/Images/web/d.jpg" alt="Featured offer" loading="lazy" decoding="async"/></a>
-          <a class="bs-slide" href="category.html?slug=hampers"><img src="assets/Images/web/e.jpg" alt="Featured offer" loading="lazy" decoding="async"/></a>
+          <a class="bs-slide" href="category.html?slug=hampers"><picture><source media="(max-width: 540px)" srcset="assets/Images/mob/web/a.jpg"/><img src="assets/Images/web/a.jpg" alt="Royal Sweets & Bakehouse — Premium Gift Hampers" fetchpriority="high" decoding="async"/></picture></a>
+          <a class="bs-slide" href="category.html?slug=sweets"><picture><source media="(max-width: 540px)" srcset="assets/Images/mob/web/b.jpg"/><img src="assets/Images/web/b.jpg" alt="Featured offer" loading="lazy" decoding="async"/></picture></a>
+          <a class="bs-slide" href="category.html?slug=dryfruits"><picture><source media="(max-width: 540px)" srcset="assets/Images/mob/web/c.jpg"/><img src="assets/Images/web/c.jpg" alt="Featured offer" loading="lazy" decoding="async"/></picture></a>
+          <a class="bs-slide" href="category.html?slug=bakery"><picture><source media="(max-width: 540px)" srcset="assets/Images/mob/web/d.jpg"/><img src="assets/Images/web/d.jpg" alt="Featured offer" loading="lazy" decoding="async"/></picture></a>
+          <a class="bs-slide" href="category.html?slug=hampers"><picture><source media="(max-width: 540px)" srcset="assets/Images/mob/web/e.jpg"/><img src="assets/Images/web/e.jpg" alt="Featured offer" loading="lazy" decoding="async"/></picture></a>
         </div>
       </div>
       <button class="bs-arrow bs-prev" type="button" aria-label="Previous banner">&#8249;</button>
@@ -378,12 +395,6 @@
           <div class="cta-row">
             <a class="btn btn-lg" href="category.html?slug=hampers">Shop Hampers <span style="font-size:18px">→</span></a>
             <a class="btn btn-ghost btn-lg" href="collections.html">Build your own box</a>
-          </div>
-          <div class="stats">
-            <div><div class="lbl">Est.</div><div class="v accent">1987</div></div>
-            <div><div class="lbl">Pure-veg</div><div class="v">100%</div></div>
-            <div><div class="lbl">Delivered to</div><div class="v">410+ pin codes</div></div>
-            <div><div class="lbl">Repeat buyers</div><div class="v gold">72%</div></div>
           </div>
         </div>
 
@@ -428,7 +439,7 @@
         <div class="section-head">
           <div>
             <div class="eyebrow">Categories</div>
-            <h2 class="h2 disp" id="cat-title">Browse the kitchen</h2>
+            <h2 class="h2 disp" id="cat-title">Browse the Legacy</h2>
           </div>
           <a href="collections.html" class="more">View all 257 items →</a>
         </div>
